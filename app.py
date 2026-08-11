@@ -2,12 +2,12 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import json, os, struct, math
-import folium
-from folium import raster_layers
-from folium import Element
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
 import plotly.express as px
 import plotly.graph_objects as go
-from streamlit_folium import st_folium
 from matplotlib import cm
 from matplotlib.colors import Normalize, to_hex
 
@@ -22,13 +22,12 @@ st.set_page_config(
   page_icon='🌋', layout='wide')
 D = 'data'
 
-# ================= ESTILO =================
 if os.path.exists('style.css'):
     st.markdown('<style>' +
       open('style.css').read() + '</style>',
       unsafe_allow_html=True)
 
-# ============== CARGA DEFENSIVA ==============
+# ---------- carga defensiva ----------
 def csv_(n):
     p = f'{D}/{n}'
     if not os.path.exists(p):
@@ -54,13 +53,13 @@ def geo_(n):
         return {'type': 'FeatureCollection',
                 'features': []}
 
-# ========= BOUNDS + ALINEACIÓN USGS =========
+# ---------- bounds ----------
 bp = f'{D}/bounds.json'
 if os.path.exists(bp):
     W, S, E, N = json.load(open(bp))['bounds']
 else:
     W, S, E, N = -79.3, 1.8, -73.1, 7.9
-BOUNDS = [[S, W], [N, E]]
+BFLAT = [W, S, E, N]
 
 def bounds_png(png, pngw):
     try:
@@ -80,10 +79,9 @@ def bounds_png(png, pngw):
         top = ff - e / 2
         right = left + a * w
         bottom = top + e * h
-        bb = [[bottom, left], [top, right]]
         if bottom >= top or left >= right:
             return None
-        return bb
+        return [left, bottom, right, top]
     except Exception:
         return None
 
@@ -91,11 +89,10 @@ BINT = bounds_png(
   f'{D}/intensity_overlay.png',
   f'{D}/intensity_overlay.pngw')
 if BINT is None:
-    BINT = BOUNDS
+    BINT = BFLAT
 
-EPI_COL = [4.903, -76.189]
+EPI = [4.903, -76.189]
 
-# ============== DATOS ==============
 d_exp = csv_('exposicion_deptos_MMI6.csv')
 d_mun = csv_('exposicion_municipios_MMI6.csv')
 d_con = csv_('construido_deptos_MMI6.csv')
@@ -107,7 +104,13 @@ rep = geo_('replicas.geojson')
 sint = rep.get('metadata', {}).get(
   'sintetico', False)
 
-# ============ CONSTANTES ============
+try:
+    import geopandas as gpd
+    g_dep = gpd.GeoDataFrame.from_features(
+      dep_gj['features'])
+except Exception:
+    g_dep = None
+
 AUTOR = ('Ensayo desarrollado por '
   '<b>Rafael Leonardo Ruiz Díaz</b> · '
   'un aporte para entender el sismo')
@@ -126,7 +129,7 @@ MMI = [
   ('IX', '#e31a1c', 'Violento',
    'Colapsos parciales y totales.')]
 
-# ============= HELPERS =============
+# ---------- helpers ----------
 def fmt(x):
     return f'{x:,.0f}'
 
@@ -146,80 +149,66 @@ def chart_cfg(fig):
                 color='#12263f'),
       margin=dict(l=20, r=20, t=50, b=20))
 
-def mapa_base(zoom=7, loc=None):
-    loc = loc or [4.9, -76.2]
-    m = folium.Map(location=loc,
-      zoom_start=zoom,
-      tiles='cartodbpositron')
-    folium.TileLayer(
-      tiles='https://server.arcgisonline.com/'
-        'ArcGIS/rest/services/World_Imagery/'
-        'MapServer/tile/{z}/{y}/{x}',
-      attr='Esri', name='Satélite').add_to(m)
-    folium.LayerControl().add_to(m)
-    return m
-
-def overlay(m, png, op_=0.75, bb=None):
-    p = f'{D}/{png}'
-    if not os.path.exists(p):
-        st.caption('⚠️ Falta el archivo: ' + png)
-        return
-    try:
-        raster_layers.ImageOverlay(
-          p, bounds=bb or BOUNDS,
-          opacity=op_,
-          interactive=False).add_to(m)
-    except Exception as e:
-        st.caption('⚠️ No se pudo cargar '
-          + png + ': ' + str(e))
-
-def epi(m):
-    folium.Marker(EPI_COL,
-      popup='Epicentro M7.4',
-      icon=folium.Icon(
-        color='red', icon='star')).add_to(m)
-
-def mostrar_mapa(m, h=520):
-    try:
-        st_folium(m, height=h)
-    except Exception as e:
-        st.error('El mapa no se pudo renderizar: '
-          + str(e))
-
-def leyenda(m, titulo, items, nota=''):
-    rows = ''
-    for c, t in items:
-        rows += ('<div style="margin:2px 0;">'
-          '<span style="display:inline-block;'
-          'width:14px;height:14px;'
-          'border-radius:4px;background:' + c +
-          ';margin-right:8px;'
-          'vertical-align:-2px;'
-          'border:1px solid rgba(0,0,0,.3);">'
-          '</span>'
-          '<span style="color:#12263f;">' + t +
-          '</span></div>')
-    html = ('<div style="position:fixed;'
-      'bottom:24px;left:12px;z-index:9999;'
-      'background:#ffffff;color:#12263f;'
-      'padding:12px 16px;border-radius:12px;'
-      'border:1px solid #cbd5e1;'
-      'box-shadow:0 4px 16px rgba(0,0,0,.35);'
-      'font-family:Inter,Arial,sans-serif;'
-      'font-size:12px;line-height:1.7;'
-      'min-width:170px;">'
-      '<div style="font-weight:800;'
-      'font-size:13px;color:#0b1f3a;'
-      'margin-bottom:6px;">' + titulo +
-      '</div>' + rows)
+def mapa_estatico(titulo, capa=None, bb=None,
+  coro=None, items=None, nota=None,
+  puntos=None):
+    fig, ax = plt.subplots(
+      figsize=(9.5, 9.5), dpi=150)
+    ax.set_facecolor('#eef2f7')
+    if g_dep is not None:
+        if coro is None:
+            g_dep.boundary.plot(ax=ax,
+              color='#93a1b5', linewidth=0.7)
+        else:
+            g_dep.plot(column=coro, cmap='Reds',
+              ax=ax, edgecolor='#8895a8',
+              linewidth=0.7)
+    if capa:
+        p = f'{D}/{capa}'
+        if os.path.exists(p):
+            img = plt.imread(p)
+            b = bb or BFLAT
+            ax.imshow(img,
+              extent=(b[0], b[2], b[1], b[3]),
+              alpha=0.9, zorder=3)
+        else:
+            st.caption('⚠️ Falta: ' + capa)
+    if puntos:
+        for lon, lat, r in puntos:
+            ax.plot(lon, lat, 'o',
+              color='#d10000', markersize=r,
+              markeredgecolor='white',
+              markeredgewidth=0.6,
+              alpha=0.7, zorder=4)
+    ax.plot(EPI[1], EPI[0], '*',
+      color='#d10000', markersize=16,
+      markeredgecolor='white',
+      markeredgewidth=1.2, zorder=6)
+    if items:
+        hs = [Patch(facecolor=c,
+          edgecolor='#444', label=t)
+          for c, t in items]
+        lg = ax.legend(hs, loc='lower left',
+          fontsize=9, title=titulo,
+          framealpha=0.97)
+        lg.get_frame().set_facecolor('white')
+        lg.get_frame().set_edgecolor('#8895a8')
+        lg.get_title().set_color('#0b1f3a')
+        for tx in lg.get_texts():
+            tx.set_color('#12263f')
     if nota:
-        html += ('<div style="margin-top:6px;'
-          'font-size:10px;color:#46587a;">' +
-          nota + '</div>')
-    html += '</div>'
-    m.get_root().html.add_child(Element(html))
+        ax.text(0.0, -0.015, nota,
+          transform=ax.transAxes, fontsize=8,
+          color='#46587a')
+    ax.set_xlim(W - 0.4, E + 0.4)
+    ax.set_ylim(S - 0.4, N + 0.4)
+    ax.set_aspect(1.0)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    st.pyplot(fig)
+    plt.close(fig)
 
-# ============ SECCIONES ============
+# ---------- secciones ----------
 def sec_inicio():
     st.markdown('<div class="hero">'
       '<h1 style="color:#ffffff !important;">'
@@ -250,19 +239,15 @@ def sec_inicio():
     c3.metric('Municipios afectados', n_mun)
     c4.metric('km² urbanos expuestos', fmt(km2))
     st.markdown('---')
-    m = mapa_base()
-    overlay(m, 'intensity_overlay.png', 0.85,
-            BINT)
-    epi(m)
-    leyenda(m, 'Intensidad (MMI)',
-      [(x[1], x[0]) for x in MMI],
-      nota='Render oficial USGS ShakeMap')
-    mostrar_mapa(m, 540)
+    mapa_estatico('Intensidad (MMI)',
+      capa='intensity_overlay.png', bb=BINT,
+      items=[(x[1], x[0] + ' ' + x[2])
+             for x in MMI],
+      nota='Render oficial USGS ShakeMap · '
+        'estrella = epicentro')
     lectura('<b>Cómo leer el mapa:</b> los colores '
       'cálidos (amarillo→rojo) indican sacudida más '
-      'fuerte. La estrella es el epicentro. Usa el '
-      'control de capas (arriba a la derecha) para '
-      'alternar base clara o satélite.')
+      'fuerte; la estrella es el epicentro.')
 
 def sec_sismo():
     st.title('🌍 El sismo en contexto')
@@ -291,16 +276,16 @@ def sec_sismo():
                 for f in feats]
         t_h = [f['properties'].get('time_h', 0)
                for f in feats]
-        m = mapa_base()
+        pts = []
         for f in feats:
             co = f['geometry']['coordinates']
             mg = f['properties']['mag']
-            folium.CircleMarker([co[1], co[0]],
-              radius=2 + mg * 1.5,
-              color='crimson', fill=True,
-              fill_opacity=0.5).add_to(m)
-        epi(m)
-        mostrar_mapa(m, 420)
+            pts.append((co[0], co[1],
+                        1.5 + mg * 1.2))
+        mapa_estatico('Réplicas', puntos=pts,
+          items=[('#d10000', 'Réplicas '
+            '(tamaño = magnitud)')],
+          nota='Catálogo Omori–GR')
         c1, c2 = st.columns(2)
         with c1:
             fig = px.scatter(x=t_h, y=mags,
@@ -423,8 +408,7 @@ def sec_comparativa():
           '<li>Requiere: suelo granular suelto + '
           'saturación de agua + demanda cíclica '
           'fuerte.</li>'
-          '<li>Fenómeno distinto a la amplificación: '
-          'las estructuras pueden hundirse o '
+          '<li>Las estructuras pueden hundirse o '
           'inclinarse por pérdida de soporte.</li>'
           '</ul></div>', unsafe_allow_html=True)
     st.subheader('Cada estructura "escucha" un '
@@ -502,20 +486,17 @@ def sec_intensidad():
               '<b>' + nom + '</b><br>' + desc +
               '</div>', unsafe_allow_html=True)
     st.markdown('---')
-    m = mapa_base()
-    overlay(m, 'intensity_overlay.png', 0.85,
-            BINT)
-    epi(m)
-    leyenda(m, 'Intensidad (MMI)',
-      [(x[1], x[0]) for x in MMI],
-      nota='Render oficial USGS ShakeMap')
-    mostrar_mapa(m, 520)
+    mapa_estatico('Intensidad (MMI)',
+      capa='intensity_overlay.png', bb=BINT,
+      items=[(x[1], x[0] + ' ' + x[2])
+             for x in MMI],
+      nota='Render oficial USGS ShakeMap, alineado '
+        'con su world file (.pngw)')
     with st.expander('¿Cómo se calculó este mapa?'):
         st.write('El USGS combina registros de '
           'acelerógrafos, reportes ciudadanos y '
           'modelos de atenuación. Mostramos el '
-          'render oficial del ShakeMap, alineado con '
-          'su world file (.pngw).')
+          'render oficial del ShakeMap.')
 
 def sec_poblacion():
     st.title('👥 ¿Cuántas personas fueron '
@@ -527,27 +508,18 @@ def sec_poblacion():
       'sacudida.')
     tot = suma(d_exp, 'pob_MMI6plus')
     st.metric('Población con MMI ≥ 6', fmt(tot))
-    m = mapa_base()
-    if not d_exp.empty:
-        nrm = Normalize(0,
-          d_exp.pob_MMI6plus.max())
+    coro = None
+    if g_dep is not None and not d_exp.empty:
         vals = dict(zip(d_exp.ADM1_NAME,
           d_exp.pob_MMI6plus))
-        def style(f):
-            v = vals.get(
-              f['properties']['ADM1_NAME'], 0)
-            return {'fillColor': to_hex(CMAP(nrm(v))),
-              'color': '#444', 'weight': 0.8,
-              'fillOpacity': 0.75}
-        folium.GeoJson(dep_gj,
-          style_function=style,
-          tooltip=folium.GeoJsonTooltip(
-            ['ADM1_NAME'])).add_to(m)
-    epi(m)
-    leyenda(m, 'Población expuesta',
-      ['#fff5f0', '#fb6a4a', '#a10f2b'],
-      nota='Baja → alta (coropleta)')
-    mostrar_mapa(m, 520)
+        coro = [vals.get(n, 0)
+                for n in g_dep.ADM1_NAME]
+    mapa_estatico('Población expuesta', coro=coro,
+      items=[(to_hex(CMAP(0.15)), 'Baja'),
+             (to_hex(CMAP(0.5)), 'Media'),
+             (to_hex(CMAP(0.9)), 'Alta')],
+      nota='Coropleta: personas en MMI ≥ 6 por '
+        'departamento')
     a, b = st.columns(2)
     with a:
         if not d_exp.empty:
@@ -648,22 +620,24 @@ def sec_secundarias():
         'desliz.png': '🟠 Deslizamientos',
         'liq.png': '🔵 Licuefacción',
         'sar.png': '🛰️ Cambio SAR'}[x])
-    m = mapa_base()
-    overlay(m, capa, 0.75)
-    epi(m)
     if capa == 'desliz.png':
-        leyenda(m, 'Susceptibilidad',
-          ['#ffffb2', '#fd8d3c', '#bd0026'],
-          nota='Baja → alta (PGA × pendiente)')
+        items = [('#ffffb2', 'Baja'),
+          ('#fd8d3c', 'Media'),
+          ('#bd0026', 'Alta')]
+        nota = 'Susceptibilidad = PGA × pendiente, '
+          'calibrada en zona sacudida'
     elif capa == 'liq.png':
-        leyenda(m, 'Licuefacción',
-          ['#deebf7', '#6baed6', '#08519c'],
-          nota='Baja → alta (valles húmedos)')
+        items = [('#deebf7', 'Baja'),
+          ('#6baed6', 'Media'),
+          ('#08519c', 'Alta')]
+        nota = 'Licuefacción: valles planos y '
+          'húmedos con sacudida fuerte'
     else:
-        leyenda(m, 'Cambio SAR',
-          ['#000000', '#ff4500'],
-          nota='|log-ratio VH| pre/post')
-    mostrar_mapa(m, 500)
+        items = [('#000000', 'Sin cambio'),
+          ('#ff4500', 'Cambio ≥ 2.5 dB')]
+        nota = 'Sentinel-1: |log-ratio VH| pre/post'
+    mapa_estatico('Amenaza secundaria',
+      capa=capa, items=items, nota=nota)
     if not d_sec.empty:
         a, b = st.columns(2)
         with a:
@@ -701,11 +675,9 @@ def sec_validacion():
     if d_est.empty:
         st.info('El catálogo USGS no publica PGA '
           'por estación para este evento aún.')
-        m = mapa_base()
-        overlay(m, 'intensity_overlay.png', 0.85,
-                BINT)
-        epi(m)
-        mostrar_mapa(m, 500)
+        mapa_estatico('Intensidad (MMI)',
+          capa='intensity_overlay.png', bb=BINT,
+          items=[(x[1], x[0]) for x in MMI])
     else:
         a, b = st.columns(2)
         with a:
@@ -807,9 +779,6 @@ def sec_metodologia():
                 f'{D}/{f}') / 1024, 1)})
         st.dataframe(pd.DataFrame(rows),
           width='stretch')
-        st.caption('Si algún PNG pesa pocos KB, '
-          'puede estar vacío: repórtalo para '
-          'regenerarlo.')
     st.subheader('Descarga de datos')
     if os.path.exists(D):
         for f in sorted(os.listdir(D)):
@@ -822,7 +791,7 @@ def sec_metodologia():
                 except Exception:
                     pass
 
-# ============ NAVEGACIÓN ============
+# ---------- navegación ----------
 st.sidebar.title('🌋 Observatorio')
 st.sidebar.caption('Sismo M7.4 · Colombia')
 SECCIONES = [
