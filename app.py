@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import json, os, struct, math
+import requests
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -87,6 +88,45 @@ if BINT is None: BINT = BFLAT
 
 EPI = [4.903, -76.189]
 
+# ---------- CONSULTA A OPENSTREETMAP (HOT) ----------
+@st.cache_data(show_spinner="Consultando infraestructura crítica en OpenStreetMap (HOT)...")
+def cargar_infra_osm():
+    overpass_url = "https://overpass-api.de/api/interpreter"
+    # Bounding box de Colombia afectada: S, W, N, E (1.8, -79.3, 7.9, -73.1)
+    query = """
+    [out:json][timeout:50];
+    (
+      node["amenity"="hospital"](1.8,-79.3,7.9,-73.1);
+      way["amenity"="hospital"](1.8,-79.3,7.9,-73.1);
+      node["amenity"="school"](1.8,-79.3,7.9,-73.1);
+      way["amenity"="school"](1.8,-79.3,7.9,-73.1);
+    );
+    out center 1000;
+    """
+    try:
+        response = requests.post(overpass_url, data={'data': query}, timeout=60)
+        response.raise_for_status()
+        data = response.json()
+        puntos = []
+        for el in data.get('elements', []):
+            lat = el.get('lat') or el.get('center', {}).get('lat')
+            lon = el.get('lon') or el.get('center', {}).get('lon')
+            if lat and lon:
+                tags = el.get('tags', {})
+                name = tags.get('name', 'Sin nombre')
+                amenity = tags.get('amenity', 'desconocido')
+                if amenity == 'hospital':
+                    color = 'darkred'; icon = 'plus'
+                elif amenity == 'school':
+                    color = 'darkblue'; icon = 'graduation-cap'
+                else: continue
+                puntos.append({'lat': lat, 'lon': lon, 'name': name, 'tipo': amenity, 'color': color, 'icon': icon})
+        return puntos
+    except Exception:
+        return []
+
+osm_infra = cargar_infra_osm()
+
 # ---------- CACHÉ DE DATOS ----------
 @st.cache_data
 def cargar_datos():
@@ -104,9 +144,8 @@ def cargar_datos():
         import geopandas as gpd
         g_dep = gpd.GeoDataFrame.from_features(dep_gj['features'])
         
-        # --- Unir datos para Tooltips interactivos ---
+        # Unir datos para Tooltips interactivos
         if not d_exp.empty and 'ADM1_NAME' in d_exp.columns:
-            # Identificar la columna de nombre en el GeoDataFrame
             possible_cols = ['ADM1_NAME', 'NOMBRE_DEP', 'NOMBRE', 'DPTO_NOMBRE']
             name_col = None
             for col in possible_cols:
@@ -119,7 +158,6 @@ def cargar_datos():
                 d_exp['merge_col'] = d_exp['ADM1_NAME'].astype(str).str.upper().str.strip()
                 d_exp_clean = d_exp[['merge_col', 'pob_MMI6plus']].rename(columns={'pob_MMI6plus': 'Pob_Exp'})
                 g_dep = g_dep.merge(d_exp_clean, on='merge_col', how='left')
-                # Asegurar que exista una columna llamada ADM1_NAME para el tooltip
                 if name_col != 'ADM1_NAME':
                     g_dep['ADM1_NAME'] = g_dep[name_col]
     except Exception:
@@ -156,7 +194,7 @@ def chart_cfg(fig):
       margin=dict(l=20, r=20, t=50, b=20))
 
 # ---------- MAPA LEAFLET INTERACTIVO ----------
-def mapa_interactivo(titulo, capa=None, bb=None, coro=None, items=None, nota=None, puntos=None):
+def mapa_interactivo(titulo, capa=None, bb=None, coro=None, items=None, nota=None, puntos=None, infra=None):
     m = folium.Map(location=[EPI[0], EPI[1]], zoom_start=6, tiles='CartoDB positron', control_scale=True)
 
     # 1. Capa GeoJSON (Límites o Coropleta)
@@ -212,19 +250,38 @@ def mapa_interactivo(titulo, capa=None, bb=None, coro=None, items=None, nota=Non
 
     # 3. Marcadores de Réplicas
     if puntos:
+        fg_rep = folium.FeatureGroup(name='♻️ Réplicas')
         for lon, lat, r in puntos:
             folium.CircleMarker(
                 location=[lat, lon], radius=r, color='white', weight=0.6,
                 fill=True, fill_color='#d10000', fill_opacity=0.7
-            ).add_to(m)
+            ).add_to(fg_rep)
+        fg_rep.add_to(m)
 
-    # 4. Marcador del Epicentro
+    # 4. Marcadores de Infraestructura (HOT/OSM)
+    if infra:
+        fg_hosp = folium.FeatureGroup(name='🏥 Hospitales (OSM)')
+        fg_esc = folium.FeatureGroup(name='🏫 Escuelas (OSM)')
+        for p in infra:
+            marker = folium.Marker(
+                location=[p['lat'], p['lon']],
+                tooltip=f"<b>{p['name']}</b><br>Tipo: {p['tipo'].capitalize()}",
+                icon=folium.Icon(color=p['color'], icon=p['icon'], prefix='fa')
+            )
+            if p['tipo'] == 'hospital':
+                marker.add_to(fg_hosp)
+            else:
+                marker.add_to(fg_esc)
+        fg_hosp.add_to(m)
+        fg_esc.add_to(m)
+
+    # 5. Marcador del Epicentro
     folium.Marker(
         location=[EPI[0], EPI[1]], tooltip='Epicentro (M7.4)',
         icon=folium.Icon(color='red', icon='star', prefix='fa')
     ).add_to(m)
 
-    # 5. Leyenda HTML personalizada
+    # 6. Leyenda HTML personalizada
     if items:
         legend_html = """
         <div style="position: fixed; bottom: 40px; left: 40px; z-index: 9999;
@@ -244,7 +301,7 @@ def mapa_interactivo(titulo, capa=None, bb=None, coro=None, items=None, nota=Non
         legend_html += "</div>"
         m.get_root().html.add_child(folium.Element(legend_html))
 
-    # 6. Control de capas
+    # 7. Control de capas
     folium.LayerControl(collapsed=False).add_to(m)
 
     # Renderizar en Streamlit
@@ -257,7 +314,7 @@ def sec_inicio():
       '<p>Observatorio ciudadano de exposición y riesgo · 10 de agosto de 2026</p>'
       '<span class="badge">USGS ShakeMap</span>'
       '<span class="badge">WorldPop</span>'
-      '<span class="badge">Sentinel-1</span>'
+      '<span class="badge">HOT / OpenStreetMap</span>'
       '<div class="autor">' + AUTOR + '</div></div>', unsafe_allow_html=True)
     
     lectura('<b>¿Qué es este sitio?</b> Un panel interactivo que traduce los datos técnicos del sismo en información comprensible: cuántas personas sintieron el temblor, qué zonas pueden sufrir deslizamientos y qué ciudades deben priorizar revisiones.')
@@ -277,9 +334,10 @@ def sec_inicio():
     mapa_interactivo('Intensidad (MMI)',
       capa='intensity_overlay.png', bb=BINT,
       items=[(x[1], x[0] + ' ' + x[2]) for x in MMI],
-      nota='Render oficial USGS ShakeMap · estrella = epicentro')
+      nota='Render oficial USGS ShakeMap · estrella = epicentro',
+      infra=osm_infra)
       
-    lectura('<b>Cómo leer el mapa:</b> los colores cálidos (amarillo→rojo) indican sacudida más fuerte; la estrella es el epicentro.')
+    lectura('<b>Cómo leer el mapa:</b> los colores cálidos (amarillo→rojo) indican sacudida más fuerte; la estrella es el epicentro. Activa las capas de hospitales y escuelas en la esquina superior derecha para ver la infraestructura expuesta.')
 
 def sec_sismo():
     st.title('🌍 El sismo en contexto')
@@ -308,7 +366,8 @@ def sec_sismo():
             
         mapa_interactivo('Réplicas', puntos=pts,
           items=[('#d10000', 'Réplicas (tamaño = magnitud)')],
-          nota='Catálogo Omori–GR')
+          nota='Catálogo Omori–GR',
+          infra=osm_infra)
           
         c1, c2 = st.columns(2)
         with c1:
@@ -377,7 +436,8 @@ def sec_intensidad():
     mapa_interactivo('Intensidad (MMI)',
       capa='intensity_overlay.png', bb=BINT,
       items=[(x[1], x[0] + ' ' + x[2]) for x in MMI],
-      nota='Render oficial USGS ShakeMap, alineado con su world file (.pngw)')
+      nota='Render oficial USGS ShakeMap, alineado con su world file (.pngw)',
+      infra=osm_infra)
 
 def sec_poblacion():
     st.title('👥 ¿Cuántas personas fueron expuestas?')
@@ -392,7 +452,8 @@ def sec_poblacion():
         
     mapa_interactivo('Población expuesta', coro=coro,
       items=[(to_hex(CMAP(0.15)), 'Baja'), (to_hex(CMAP(0.5)), 'Media'), (to_hex(CMAP(0.9)), 'Alta')],
-      nota='Coropleta: personas en MMI ≥ 6 por departamento')
+      nota='Coropleta: personas en MMI ≥ 6 por departamento',
+      infra=osm_infra)
       
     a, b = st.columns(2)
     with a:
@@ -432,7 +493,7 @@ def sec_edificaciones():
             r = rr.iloc[0]
             fig.add_trace(go.Scatter(x=TS, y=[r[k] for k in cols], mode='lines+markers', name=c))
         
-        # MEJORA: Líneas verticales de resonancia
+        # Líneas verticales de resonancia
         fig.add_vline(x=0.3, line_width=2, line_dash="dash", line_color="blue")
         fig.add_annotation(x=0.3, y=0.1, text="Casas (0.3s)", textangle=-90, font=dict(color="blue", size=10))
         fig.add_vline(x=1.0, line_width=2, line_dash="dash", line_color="orange")
@@ -458,7 +519,7 @@ def sec_secundarias():
     else:
         items = [('#000000', 'Sin cambio'), ('#ff4500', 'Cambio ≥ 2.5 dB')]
         nota = 'Sentinel-1: |log-ratio VH| pre/post'
-    mapa_interactivo('Amenaza secundaria', capa=capa, items=items, nota=nota)
+    mapa_interactivo('Amenaza secundaria', capa=capa, items=items, nota=nota, infra=osm_infra)
     
     if not d_sec.empty:
         a, b = st.columns(2)
@@ -476,7 +537,7 @@ def sec_validacion():
     lectura('<b>Idea clave:</b> comparamos el PGA modelado por el USGS con el PGA registrado por estaciones reales. Si los puntos se acercan a la línea 1:1, el modelo es confiable.')
     if d_est.empty:
         st.info('El catálogo USGS no publica PGA por estación para este evento aún.')
-        mapa_interactivo('Intensidad (MMI)', capa='intensity_overlay.png', bb=BINT, items=[(x[1], x[0]) for x in MMI])
+        mapa_interactivo('Intensidad (MMI)', capa='intensity_overlay.png', bb=BINT, items=[(x[1], x[0]) for x in MMI], infra=osm_infra)
     else:
         a, b = st.columns(2)
         with a:
@@ -512,8 +573,9 @@ def sec_aprende():
 def sec_metodologia():
     st.title('🔬 Metodología, fuentes y límites')
     texto = ("**Autor:** Rafael Leonardo Ruiz Díaz. Ensayo de divulgación para entender el sismo.\n\n"
-             "**Fuentes:** USGS ShakeMap us6000tjl2 · WorldPop 2020 · ESA WorldCover · VIIRS · SRTM · CHIRPS · Sentinel-1 · FAO GAUL.\n\n"
+             "**Fuentes:** USGS ShakeMap us6000tjl2 · WorldPop 2020 · ESA WorldCover · VIIRS · SRTM · CHIRPS · Sentinel-1 · FAO GAUL · OpenStreetMap (HOT).\n\n"
              "**Método:** exposición = ShakeMap MMI × población a escala nativa (100 m); deslizamientos = PGA × pendiente; licuefacción = PGA × (1−pendiente) × humedad; calibrado dentro de la zona sacudida (MMI ≥ 5).\n\n"
+             "**Infraestructura crítica:** descargada en tiempo real desde la API de Overpass (OpenStreetMap) para análisis de impacto hospitalario y educativo.\n\n"
              "**Comparativa regional:** el análisis Colombia–Venezuela sigue el marco Amenaza × Exposición × Vulnerabilidad.\n\n"
              "**Limitaciones:** productos modelados; el raster MMI cubre el núcleo de sacudida; réplicas simuladas si la API no publica.")
     st.markdown(texto)
