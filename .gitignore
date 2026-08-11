@@ -1,0 +1,17 @@
+# Archivos temporales de Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Entornos virtuales
+venv/
+env/
+ENV/
+
+# Archivos de Streamlit
+.streamlit/secrets.toml
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
