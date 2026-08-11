@@ -188,12 +188,12 @@ def lectura(txt):
     st.markdown('<div class="lectura">' + txt + '</div>', unsafe_allow_html=True)
 
 def chart_cfg(fig):
+    # Corrección: removido locale='es' por incompatibilidad con Plotly 6.9
     fig.update_layout(
         template='plotly_white',
         font=dict(family='Inter', size=12, color='#12263f'),
         margin=dict(l=20, r=20, t=50, b=20),
-        separators='.,', 
-        locale='es'
+        separators='.,'
     )
 
 # ---------- MAPA LEAFLET INTERACTIVO ----------
@@ -342,7 +342,7 @@ def sec_comparativa():
     lectura('<b>Más allá de la magnitud:</b> por qué sismos de tamaño similar pueden generar impactos radicalmente diferentes. De la roca a la ciudad.')
     a, b = st.columns(2)
     with a: st.markdown('<div class="card card-col"><h3>🏔️ Caso Colombia · 10-ago-2026</h3><b>Mw 7.4 · Profundidad ~107 km</b><ul class="mini"><li><b>Ruptura profunda:</b> mayor recorrido de las ondas hasta la superficie.</li><li><b>Mayor dispersión:</b> las ondas se atenúan significativamente antes de llegar.</li><li><b>Área afectada:</b> movimiento perceptible en una región muy extensa, con menor violencia puntual.</li></ul></div>', unsafe_allow_html=True)
-    with b: st.markdown('<div class="card card-ven"><h3>🏙️ Caso Venezuela · 4-jun-2026</h3><b>Doblete Mw 7.2 + 7.5 · ~10–20 km</b><ul class="mini"><li><b>Ruptura somera:</b> muy próxima a zonas urbanas.</li><li><b>Menor atenuación:</b> las ondas golpean con mayor energía.</li><li><b>Doblete sísmico:</b> dos demandas sucesivas sobre estructuras posiblemente degradadas por el primer evento.</li></ul></div>', unsafe_allow_html=True)
+    with b: st.markdown('<div class="card card-ven"><h3>🏙️ Caso Venezuela · 24-jun-2026</h3><b>Doblete Mw 7.2 + 7.5 · ~10–20 km</b><ul class="mini"><li><b>Ruptura somera:</b> muy próxima a zonas urbanas.</li><li><b>Menor atenuación:</b> las ondas golpean con mayor energía.</li><li><b>Doblete sísmico:</b> dos demandas sucesivas sobre estructuras posiblemente degradadas por el primer evento.</li></ul></div>', unsafe_allow_html=True)
     st.markdown('---'); c1, c2 = st.columns(2)
     with c1:
         fig = px.bar(x=['Colombia', 'Venezuela'], y=[107, 15], labels={'y': 'Profundidad (km)', 'x': ''}, title='Profundidad del hipocentro', color=['Colombia', 'Venezuela'], color_discrete_map={'Colombia': '#2563eb', 'Venezuela': '#ea580c'})
