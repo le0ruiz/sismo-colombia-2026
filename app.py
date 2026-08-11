@@ -1,3 +1,4 @@
+
 import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
@@ -173,8 +174,12 @@ MMI = [
   ('VIII', '#fb8b2c', 'Severo', 'Daño considerable; pánico.'),
   ('IX', '#e31a1c', 'Violento', 'Colapsos parciales y totales.')]
 
-# ---------- helpers ----------
-def fmt(x): return f'{x:,.0f}'
+# ---------- HELPERS Y FORMATO ----------
+def fmt(x, dec=0):
+    if pd.isna(x) or x is None: return '0'
+    s = f"{x:,.{dec}f}"
+    # Intercambiamos comas y puntos temporalmente para formato hispano
+    return s.replace(",", "X").replace(".", ",").replace("X", ".")
 
 def suma(df, col):
     if df.empty or col not in df: return 0.0
@@ -184,7 +189,14 @@ def lectura(txt):
     st.markdown('<div class="lectura">' + txt + '</div>', unsafe_allow_html=True)
 
 def chart_cfg(fig):
-    fig.update_layout(template='plotly_white', font=dict(family='Inter', size=12, color='#12263f'), margin=dict(l=20, r=20, t=50, b=20))
+    fig.update_layout(
+        template='plotly_white',
+        font=dict(family='Inter', size=12, color='#12263f'),
+        margin=dict(l=20, r=20, t=50, b=20),
+        # Formato español para Plotly (puntos para miles, comas para decimales)
+        separators='.,', 
+        locale='es'
+    )
 
 # ---------- MAPA LEAFLET INTERACTIVO ----------
 def mapa_interactivo(titulo, capa=None, bb=None, coro=None, items=None, nota=None, puntos=None, infra=None):
@@ -199,14 +211,26 @@ def mapa_interactivo(titulo, capa=None, bb=None, coro=None, items=None, nota=Non
             ).add_to(m)
         else:
             g_dep_temp = g_dep.copy()
-            if 'Pob_Exp' not in g_dep_temp.columns: g_dep_temp['Pob_Exp'] = coro
-            else: g_dep_temp['Pob_Exp'] = g_dep_temp['Pob_Exp'].fillna(0)
+            if 'Pob_Exp' not in g_dep_temp.columns: 
+                g_dep_temp['Pob_Exp'] = coro
+            else: 
+                g_dep_temp['Pob_Exp'] = g_dep_temp['Pob_Exp'].fillna(0)
+            
+            # Columna formateada para el tooltip del mapa
+            g_dep_temp['Pob_Exp_Fmt'] = g_dep_temp['Pob_Exp'].apply(lambda v: fmt(v))
+            
             max_v = max(coro) if max(coro) > 0 else 1
             colormap = bcm.linear.Reds_09.scale(0, max_v)
             folium.GeoJson(
                 json.loads(g_dep_temp.to_json()), name='Población expuesta',
                 style_function=lambda feature: {'fillColor': colormap(feature['properties'].get('Pob_Exp', 0)), 'color': '#8895a8', 'weight': 0.5, 'fillOpacity': 0.7},
-                tooltip=folium.GeoJsonTooltip(fields=['ADM1_NAME', 'Pob_Exp'] if 'ADM1_NAME' in g_dep_temp.columns else ['Pob_Exp'], aliases=['Departamento:', 'Pob. Expuesta:'], localize=True, sticky=False, labels=True, style="background-color: #F0EFEF; border: 2px solid black; border-radius: 3px; box-shadow: 3px;", max_width=800)
+                tooltip=folium.GeoJsonTooltip(
+                    fields=['ADM1_NAME', 'Pob_Exp_Fmt'] if 'ADM1_NAME' in g_dep_temp.columns else ['Pob_Exp_Fmt'], 
+                    aliases=['Departamento:', 'Pob. Expuesta:'],
+                    localize=True, sticky=False, labels=True,
+                    style="background-color: #F0EFEF; border: 2px solid black; border-radius: 3px; box-shadow: 3px;",
+                    max_width=800
+                )
             ).add_to(m)
             m.add_child(colormap)
 
@@ -258,8 +282,8 @@ def sec_inicio():
     n_dep = int((d_exp.pob_MMI6plus > 0).sum()) if not d_exp.empty else 0
     n_mun = int((d_mun.pob_MMI6plus > 0).sum()) if not d_mun.empty else 0
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric('Personas con sacudida fuerte', fmt(tot)); c2.metric('Departamentos afectados', n_dep)
-    c3.metric('Municipios afectados', n_mun); c4.metric('km² urbanos expuestos', fmt(km2))
+    c1.metric('Personas con sacudida fuerte', fmt(tot)); c2.metric('Departamentos afectados', fmt(n_dep))
+    c3.metric('Municipios afectados', fmt(n_mun)); c4.metric('km² urbanos expuestos', fmt(km2))
     st.markdown('---')
     mapa_interactivo('Intensidad (MMI)', capa='intensity_overlay.png', bb=BINT, items=[(x[1], x[0] + ' ' + x[2]) for x in MMI], nota='Render oficial USGS ShakeMap · estrella = epicentro', infra=osm_infra)
     lectura('<b>Cómo leer el mapa:</b> los colores cálidos (amarillo→rojo) indican sacudida más fuerte; la estrella es el epicentro. Activa las capas de hospitales y escuelas en la esquina superior derecha para ver la infraestructura expuesta.')
@@ -268,8 +292,8 @@ def sec_sismo():
     st.title('🌍 El sismo en contexto')
     lectura('<b>Resumen:</b> un sismo de magnitud 7.4 con hipocentro profundo (~107 km) bajo el Chocó. Al ser profundo, la sacudida se sintió en un área muy amplia, pero el daño extremo quedó más localizado que en un sismo superficial.')
     a, b = st.columns(2)
-    with a: st.metric('Magnitud (Mw)', '7.4'); st.metric('Profundidad', '~107 km')
-    with b: st.metric('Epicentro', '4.90°N, 76.19°O'); st.metric('Fecha', '10-ago-2026')
+    with a: st.metric('Magnitud (Mw)', '7,4'); st.metric('Profundidad', '~107 km')
+    with b: st.metric('Epicentro', '4,90°N, 76,19°O'); st.metric('Fecha', '10-ago-2026')
     st.markdown('---'); st.subheader('Réplicas')
     if sint: st.warning('Catálogo ilustrativo (Omori–GR): la API del USGS aún no publica réplicas.')
     feats = rep.get('features', [])
@@ -369,14 +393,20 @@ def sec_edificaciones():
             r = rr.iloc[0]
             fig.add_trace(go.Scatter(x=TS, y=[r[k] for k in cols], mode='lines+markers', name=c))
         fig.add_vline(x=0.3, line_width=2, line_dash="dash", line_color="blue")
-        fig.add_annotation(x=0.3, y=0.1, text="Casas (0.3s)", textangle=-90, font=dict(color="blue", size=10))
+        fig.add_annotation(x=0.3, y=0.1, text="Casas (0,3s)", textangle=-90, font=dict(color="blue", size=10))
         fig.add_vline(x=1.0, line_width=2, line_dash="dash", line_color="orange")
-        fig.add_annotation(x=1.0, y=0.1, text="Edificios Medios (1.0s)", textangle=-90, font=dict(color="orange", size=10))
+        fig.add_annotation(x=1.0, y=0.1, text="Edificios Medios (1,0s)", textangle=-90, font=dict(color="orange", size=10))
         fig.add_vline(x=3.0, line_width=2, line_dash="dash", line_color="red")
-        fig.add_annotation(x=3.0, y=0.1, text="Torres (3.0s)", textangle=-90, font=dict(color="red", size=10))
+        fig.add_annotation(x=3.0, y=0.1, text="Torres (3,0s)", textangle=-90, font=dict(color="red", size=10))
         fig.update_layout(xaxis_type='log', yaxis_type='log', xaxis_title='Período (s)', yaxis_title='Sa (%g)', title='Espectros de respuesta con resonancia estructural')
         chart_cfg(fig); st.plotly_chart(fig, use_container_width=True)
-        st.dataframe(d_ciu.sort_values('psa03', ascending=False), use_container_width=True)
+        
+        # Formatear el DataFrame antes de mostrarlo
+        d_ciu_fmt = d_ciu.sort_values('psa03', ascending=False).copy()
+        num_cols = d_ciu_fmt.select_dtypes(include=['float', 'int']).columns
+        for col in num_cols:
+            d_ciu_fmt[col] = d_ciu_fmt[col].apply(lambda x: fmt(x, 2) if pd.notna(x) else x)
+        st.dataframe(d_ciu_fmt, use_container_width=True)
 
 def sec_secundarias():
     st.title('⛰️ Deslizamientos y licuefacción')
@@ -434,9 +464,9 @@ def sec_hotosm():
 
     st.markdown('---'); st.subheader('Capas disponibles en el mapa')
     col1, col2, col3 = st.columns(3)
-    with col1: st.markdown('<div class="card card-col"><h3>🗺️ Capas Base</h3><ul class="mini"><li><b>OpenStreetMap:</b> mapa estándar</li><li><b>Positron:</b> estilo minimalista</li><li><b>Humanitarian:</b> estilo HOT</li><li><b>ESRI:</b> imágenes satelitales</li></ul></div>', unsafe_allow_html=True)
+    with col1: st.markdown('<div class="card card-col"><h3>🗺️ Caplas Base</h3><ul class="mini"><li><b>OpenStreetMap:</b> mapa estándar</li><li><b>Positron:</b> estilo minimalista</li><li><b>Humanitarian:</b> estilo HOT</li><li><b>ESRI:</b> imágenes satelitales</li></ul></div>', unsafe_allow_html=True)
     with col2: st.markdown('<div class="card card-suelo"><h3>📊 Datos del Sismo</h3><ul class="mini"><li><b>Epicentro:</b> San José del Palmar</li><li><b>ShakeMap:</b> zonas de intensidad 3.5 a 6.5</li><li><b>AOI:</b> Área de Interés para mapeo</li><li><b>ChatMap:</b> puntos reportados</li></ul></div>', unsafe_allow_html=True)
-    with col3: st.markdown('<div class="card card-ven"><h3>🏘️ Poblaciones Cercanas</h3><ul class="mini"><li><b>San José del Palmar:</b> 2,392 hab. (5.9 km)</li><li><b>Ansermanuevo:</b> 12,332 hab. (27.9 km)</li><li><b>Toro:</b> 13,764 hab. (31.4 km)</li><li><b>La Unión:</b> 41,013 hab. (37.9 km)</li><li><b>Pereira:</b> 467,269 hab. (60.7 km)</li></ul></div>', unsafe_allow_html=True)
+    with col3: st.markdown('<div class="card card-ven"><h3>🏘️ Poblaciones Cercanas</h3><ul class="mini"><li><b>San José del Palmar:</b> 2.392 hab. (5,9 km)</li><li><b>Ansermanuevo:</b> 12.332 hab. (27,9 km)</li><li><b>Toro:</b> 13.764 hab. (31,4 km)</li><li><b>La Unión:</b> 41.013 hab. (37,9 km)</li><li><b>Pereira:</b> 467.269 hab. (60,7 km)</li></ul></div>', unsafe_allow_html=True)
 
     st.markdown('---'); st.subheader('¿Qué es ChatMap?')
     st.write('**ChatMap** es una herramienta de HOTOSM que permite a los equipos de respuesta coordinar el mapeo de manera colaborativa. Los voluntarios pueden:')
@@ -452,7 +482,7 @@ def sec_hotosm():
 
     st.markdown('---')
     with st.expander('¿Qué es HOTOSM y por qué importa?'):
-        st.write('**Humanitarian OpenStreetMap Team (HOTOSM)** es una organización sin fines de lucro que coordina el mapeo colaborativo de OpenStreetMap para respuesta humanitaria y desarrollo internacional.\n\n**Después de un desastre:**\n- Los mapas actualizados salvan vidas al permitir que los equipos de rescate naveguen\n- Las organizaciones humanitarias usan estos datos para planificar la distribución de ayuda\n- Los gobiernos locales identifican infraestructura crítica dañada\n\n**Impacto:** Más de 200,000 mapeadores voluntarios en todo el mundo han contribuido a OpenStreetMap, creando el mapa abierto más grande del mundo.')
+        st.write('**Humanitarian OpenStreetMap Team (HOTOSM)** es una organización sin fines de lucro que coordina el mapeo colaborativo de OpenStreetMap para respuesta humanitaria y desarrollo internacional.\n\n**Después de un desastre:**\n- Los mapas actualizados salvan vidas al permitir que los equipos de rescate naveguen\n- Las organizaciones humanitarias usan estos datos para planificar la distribución de ayuda\n- Los gobiernos locales identifican infraestructura crítica dañada\n\n**Impacto:** Más de 200.000 mapeadores voluntarios en todo el mundo han contribuido a OpenStreetMap, creando el mapa abierto más grande del mundo.')
 
 def sec_aprende():
     st.title('📚 Glosario y conceptos')
@@ -470,7 +500,10 @@ def sec_metodologia():
     if os.path.exists(D):
         for f in sorted(os.listdir(D)):
             rows.append({'archivo': f, 'KB': round(os.path.getsize(f'{D}/{f}') / 1024, 1)})
-        st.dataframe(pd.DataFrame(rows), use_container_width=True)
+        df_archivos = pd.DataFrame(rows)
+        # Formatear la columna KB
+        df_archivos['KB'] = df_archivos['KB'].apply(lambda x: fmt(x, 1))
+        st.dataframe(df_archivos, use_container_width=True)
     st.subheader('Descarga de datos')
     if os.path.exists(D):
         for f in sorted(os.listdir(D)):
