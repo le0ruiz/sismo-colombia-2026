@@ -246,7 +246,9 @@ def mapa_interactivo(titulo, capa=None, bb=None, coro=None, items=None, nota=Non
         m.get_root().html.add_child(folium.Element(legend_html))
 
     folium.LayerControl(collapsed=False).add_to(m)
-    st_folium(m, width=None, returned_objects=[])
+    
+    # Altura responsiva adaptada para móviles (500px)
+    st_folium(m, width=None, height=500, returned_objects=[])
 
 # ---------- SECCIONES ----------
 def sec_inicio():
@@ -291,7 +293,7 @@ def sec_comparativa():
     lectura('<b>Más allá de la magnitud:</b> por qué sismos de tamaño similar pueden generar impactos radicalmente diferentes. De la roca a la ciudad.')
     a, b = st.columns(2)
     with a: st.markdown('<div class="card card-col"><h3>🏔️ Caso Colombia · 10-ago-2026</h3><b>Mw 7.4 · Profundidad ~107 km</b><ul class="mini"><li><b>Ruptura profunda:</b> mayor recorrido de las ondas hasta la superficie.</li><li><b>Mayor dispersión:</b> las ondas se atenúan significativamente antes de llegar.</li><li><b>Área afectada:</b> movimiento perceptible en una región muy extensa, con menor violencia puntual.</li></ul></div>', unsafe_allow_html=True)
-    with b: st.markdown('<div class="card card-ven"><h3>🏙️ Caso Venezuela · 24-jun-2026</h3><b>Doblete Mw 7.2 + 7.5 · ~10–20 km</b><ul class="mini"><li><b>Ruptura somera:</b> muy próxima a zonas urbanas.</li><li><b>Menor atenuación:</b> las ondas golpean con mayor energía.</li><li><b>Doblete sísmico:</b> dos demandas sucesivas sobre estructuras posiblemente degradadas por el primer evento.</li></ul></div>', unsafe_allow_html=True)
+    with b: st.markdown('<div class="card card-ven"><h3>🏙️ Caso Venezuela · 4-jun-2026</h3><b>Doblete Mw 7.2 + 7.5 · ~10–20 km</b><ul class="mini"><li><b>Ruptura somera:</b> muy próxima a zonas urbanas.</li><li><b>Menor atenuación:</b> las ondas golpean con mayor energía.</li><li><b>Doblete sísmico:</b> dos demandas sucesivas sobre estructuras posiblemente degradadas por el primer evento.</li></ul></div>', unsafe_allow_html=True)
     st.markdown('---'); c1, c2 = st.columns(2)
     with c1:
         fig = px.bar(x=['Colombia', 'Venezuela'], y=[107, 15], labels={'y': 'Profundidad (km)', 'x': ''}, title='Profundidad del hipocentro', color=['Colombia', 'Venezuela'], color_discrete_map={'Colombia': '#2563eb', 'Venezuela': '#ea580c'})
@@ -414,49 +416,35 @@ def sec_validacion():
             fig.add_trace(go.Scatter(x=d_est.dist_km, y=d_est.pga_mod, mode='markers', name='modelado', marker={'symbol': 'x'}))
             chart_cfg(fig); st.plotly_chart(fig, use_container_width=True)
 
-# ---------- SECCIÓN HOTOSM ----------
 def sec_hotosm():
     st.title('🗺️ Mapeo Humanitario (HOTOSM)')
-    lectura(
-        '<b>Respuesta colaborativa:</b> el Humanitarian OpenStreetMap Team (HOTOSM) '
-        'activó una respuesta de mapeo colaborativo para este evento. Voluntarios de '
-        'todo el mundo están mapeando infraestructura crítica, caminos y edificios '
-        'para apoyar las labores de respuesta.')
-
+    lectura('<b>Respuesta colaborativa:</b> el Humanitarian OpenStreetMap Team (HOTOSM) activó una respuesta de mapeo colaborativo para este evento. Voluntarios de todo el mundo están mapeando infraestructura crítica, caminos y edificios para apoyar las labores de respuesta.')
     st.subheader('Mapa de Respuesta Humanitaria')
-    st.caption(
-        'Organizado por **OSM Colombia** con apoyo de **UN Mappers Argentina** y **HOT**')
-
+    st.caption('Organizado por **OSM Colombia** con apoyo de **UN Mappers Argentina** y **HOT**')
+    
+    # Iframe responsivo (se ajusta con CSS para móvil)
     hotosm_iframe = """
-    <iframe 
-        src="https://umap.hotosm.org/en/map/colombia-m-74-earthquake-10-ago-2026_3482?scaleControl=false&miniMap=false&scrollWheelZoom=false&zoomControl=true&allowEdit=false&moreControl=true&searchControl=false&tilelayersControl=null&embedControl=null&datalayersControl=true&onLoadPanel=none&captionBar=false&captionMenus=true" 
-        width="100%" 
-        height="600px" 
-        frameborder="0"
-        style="border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-    </iframe>
+    <div style="width:100%; position:relative; padding-bottom:56.25%; height:0; overflow:hidden; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+        <iframe src="https://umap.hotosm.org/en/map/colombia-m-74-earthquake-10-ago-2026_3482?scaleControl=false&miniMap=false&scrollWheelZoom=false&zoomControl=true&allowEdit=false&moreControl=true&searchControl=false&tilelayersControl=null&embedControl=null&datalayersControl=true&onLoadPanel=none&captionBar=false&captionMenus=true" 
+            style="position:absolute; top:0; left:0; width:100%; height:100%; border:0; frameborder=0;">
+        </iframe>
+    </div>
     """
-    components.html(hotosm_iframe, height=620)
+    components.html(hotosm_iframe, height=500)
 
-    st.markdown('---')
-    st.subheader('Capas disponibles en el mapa')
+    st.markdown('---'); st.subheader('Capas disponibles en el mapa')
     col1, col2, col3 = st.columns(3)
-    with col1:
-        st.markdown('<div class="card card-col"><h3>🗺️ Capas Base</h3><ul class="mini"><li><b>OpenStreetMap:</b> mapa estándar</li><li><b>Positron:</b> estilo minimalista</li><li><b>Humanitarian:</b> estilo HOT</li><li><b>ESRI:</b> imágenes satelitales</li></ul></div>', unsafe_allow_html=True)
-    with col2:
-        st.markdown('<div class="card card-suelo"><h3>📊 Datos del Sismo</h3><ul class="mini"><li><b>Epicentro:</b> San José del Palmar</li><li><b>ShakeMap:</b> zonas de intensidad 3.5 a 6.5</li><li><b>AOI:</b> Área de Interés para mapeo</li><li><b>ChatMap:</b> puntos reportados</li></ul></div>', unsafe_allow_html=True)
-    with col3:
-        st.markdown('<div class="card card-ven"><h3>🏘️ Poblaciones Cercanas</h3><ul class="mini"><li><b>San José del Palmar:</b> 2,392 hab. (5.9 km)</li><li><b>Ansermanuevo:</b> 12,332 hab. (27.9 km)</li><li><b>Toro:</b> 13,764 hab. (31.4 km)</li><li><b>La Unión:</b> 41,013 hab. (37.9 km)</li><li><b>Pereira:</b> 467,269 hab. (60.7 km)</li></ul></div>', unsafe_allow_html=True)
+    with col1: st.markdown('<div class="card card-col"><h3>🗺️ Capas Base</h3><ul class="mini"><li><b>OpenStreetMap:</b> mapa estándar</li><li><b>Positron:</b> estilo minimalista</li><li><b>Humanitarian:</b> estilo HOT</li><li><b>ESRI:</b> imágenes satelitales</li></ul></div>', unsafe_allow_html=True)
+    with col2: st.markdown('<div class="card card-suelo"><h3>📊 Datos del Sismo</h3><ul class="mini"><li><b>Epicentro:</b> San José del Palmar</li><li><b>ShakeMap:</b> zonas de intensidad 3.5 a 6.5</li><li><b>AOI:</b> Área de Interés para mapeo</li><li><b>ChatMap:</b> puntos reportados</li></ul></div>', unsafe_allow_html=True)
+    with col3: st.markdown('<div class="card card-ven"><h3>🏘️ Poblaciones Cercanas</h3><ul class="mini"><li><b>San José del Palmar:</b> 2,392 hab. (5.9 km)</li><li><b>Ansermanuevo:</b> 12,332 hab. (27.9 km)</li><li><b>Toro:</b> 13,764 hab. (31.4 km)</li><li><b>La Unión:</b> 41,013 hab. (37.9 km)</li><li><b>Pereira:</b> 467,269 hab. (60.7 km)</li></ul></div>', unsafe_allow_html=True)
 
-    st.markdown('---')
-    st.subheader('¿Qué es ChatMap?')
+    st.markdown('---'); st.subheader('¿Qué es ChatMap?')
     st.write('**ChatMap** es una herramienta de HOTOSM que permite a los equipos de respuesta coordinar el mapeo de manera colaborativa. Los voluntarios pueden:')
     col1, col2 = st.columns(2)
     with col1: st.markdown('- Mapear edificios dañados\n- Identificar caminos bloqueados\n- Marcar infraestructura crítica (hospitales, escuelas)\n- Documentar puentes y estructuras vulnerables')
     with col2: st.markdown('- Validar datos existentes en OpenStreetMap\n- Priorizar áreas según ShakeMap\n- Coordinar con equipos de terreno\n- Generar datos abiertos para organizaciones humanitarias')
 
-    st.markdown('---')
-    st.subheader('Recursos y Enlaces')
+    st.markdown('---'); st.subheader('Recursos y Enlaces')
     col1, col2, col3 = st.columns(3)
     with col1: st.markdown('<div class="card card-col"><h3>🔗 Mapa Interactivo</h3><p class="mini">Accede al mapa completo de HOTOSM con todas las capas y datos de mapeo colaborativo.</p><a href="https://umap.hotosm.org/en/map/colombia-m-74-earthquake-10-ago-2026_3482" target="_blank" style="color:#2563eb;">Abrir mapa →</a></div>', unsafe_allow_html=True)
     with col2: st.markdown('<div class="card card-ven"><h3>💬 ChatMap</h3><p class="mini">Plataforma de coordinación para mapeadores voluntarios y equipos de respuesta.</p><a href="https://chatmap.hotosm.org/#map/89319bbb-a14a-4dfd-b9a1-c83b8b55785f" target="_blank" style="color:#ea580c;">Abrir ChatMap →</a></div>', unsafe_allow_html=True)
@@ -469,30 +457,15 @@ def sec_hotosm():
 def sec_aprende():
     st.title('📚 Glosario y conceptos')
     lectura('Esta sección explica, sin tecnicismos, cada término usado en el observatorio.')
-    terms = [
-      ('Magnitud (Mw)', 'Energía total liberada. Una sola cifra por sismo. Cada unidad = ~32× más energía.'),
-      ('Intensidad (MMI)', 'Cuánto se sintió en un lugar. Va de I a X+ y disminuye con la distancia.'),
-      ('PGA', 'Aceleración máxima del suelo (% de la gravedad). Mide la "fuerza" del temblor.'),
-      ('PSA', 'Aceleración espectral en un período. Indica qué tipo de edificio resuena más.'),
-      ('Exposición', 'Personas o infraestructura en zonas sacudidas. No implica daño.'),
-      ('Susceptibilidad', 'Probabilidad relativa de que una ladera falle por el sismo.'),
-      ('Licuefacción', 'Pérdida de resistencia del suelo saturado por la sacudida.'),
-      ('Doblete sísmico', 'Dos sismos grandes sucesivos: el segundo golpea estructuras ya degradadas por el primero.'),
-      ('Compatibilidad espectral', 'Cuando el suelo amplifica periodos cercanos al periodo natural de una estructura, el daño aumenta.')]
+    terms = [('Magnitud (Mw)', 'Energía total liberada. Una sola cifra por sismo. Cada unidad = ~32× más energía.'), ('Intensidad (MMI)', 'Cuánto se sintió en un lugar. Va de I a X+ y disminuye con la distancia.'), ('PGA', 'Aceleración máxima del suelo (% de la gravedad). Mide la "fuerza" del temblor.'), ('PSA', 'Aceleración espectral en un período. Indica qué tipo de edificio resuena más.'), ('Exposición', 'Personas o infraestructura en zonas sacudidas. No implica daño.'), ('Susceptibilidad', 'Probabilidad relativa de que una ladera falle por el sismo.'), ('Licuefacción', 'Pérdida de resistencia del suelo saturado por la sacudida.'), ('Doblete sísmico', 'Dos sismos grandes sucesivos: el segundo golpea estructuras ya degradadas por el primero.'), ('Compatibilidad espectral', 'Cuando el suelo amplifica periodos cercanos al periodo natural de una estructura, el daño aumenta.')]
     for t, d in terms:
         with st.expander(t): st.write(d)
 
 def sec_metodologia():
     st.title('🔬 Metodología, fuentes y límites')
-    texto = ("**Autor:** Rafael Leonardo Ruiz Díaz. Ensayo de divulgación para entender el sismo.\n\n"
-             "**Fuentes:** USGS ShakeMap us6000tjl2 · WorldPop 2020 · ESA WorldCover · VIIRS · SRTM · CHIRPS · Sentinel-1 · FAO GAUL · OpenStreetMap (HOT).\n\n"
-             "**Método:** exposición = ShakeMap MMI × población a escala nativa (100 m); deslizamientos = PGA × pendiente; licuefacción = PGA × (1−pendiente) × humedad; calibrado dentro de la zona sacudida (MMI ≥ 5).\n\n"
-             "**Infraestructura crítica:** descargada en tiempo real desde la API de Overpass (OpenStreetMap) para análisis de impacto hospitalario y educativo.\n\n"
-             "**Comparativa regional:** el análisis Colombia–Venezuela sigue el marco Amenaza × Exposición × Vulnerabilidad.\n\n"
-             "**Limitaciones:** productos modelados; el raster MMI cubre el núcleo de sacudida; réplicas simuladas si la API no publica.")
+    texto = ("**Autor:** Rafael Leonardo Ruiz Díaz. Ensayo de divulgación para entender el sismo.\n\n**Fuentes:** USGS ShakeMap us6000tjl2 · WorldPop 2020 · ESA WorldCover · VIIRS · SRTM · CHIRPS · Sentinel-1 · FAO GAUL · OpenStreetMap (HOT).\n\n**Método:** exposición = ShakeMap MMI × población a escala nativa (100 m); deslizamientos = PGA × pendiente; licuefacción = PGA × (1−pendiente) × humedad; calibrado dentro de la zona sacudida (MMI ≥ 5).\n\n**Infraestructura crítica:** descargada en tiempo real desde la API de Overpass (OpenStreetMap) para análisis de impacto hospitalario y educativo.\n\n**Comparativa regional:** el análisis Colombia–Venezuela sigue el marco Amenaza × Exposición × Vulnerabilidad.\n\n**Limitaciones:** productos modelados; el raster MMI cubre el núcleo de sacudida; réplicas simuladas si la API no publica.")
     st.markdown(texto)
-    st.markdown('---')
-    st.subheader('Estado de los archivos de datos')
+    st.markdown('---'); st.subheader('Estado de los archivos de datos')
     rows = []
     if os.path.exists(D):
         for f in sorted(os.listdir(D)):
@@ -508,10 +481,7 @@ def sec_metodologia():
 # ---------- NAVEGACIÓN ----------
 st.sidebar.title('🌋 Observatorio')
 st.sidebar.caption('Sismo M7.4 · Colombia')
-SECCIONES = [
-  '🏠 Inicio', '🌍 El sismo', '🆚 Colombia vs Venezuela', '🎯 Intensidad (MMI)', 
-  '👥 Población expuesta', '🏗️ Edificaciones', '⛰️ Amenazas secundarias', 
-  '✅ Validación', '🗺️ Mapeo Humanitario', '📚 Aprende', '🔬 Metodología y datos']
+SECCIONES = ['🏠 Inicio', '🌍 El sismo', '🆚 Colombia vs Venezuela', '🎯 Intensidad (MMI)', '👥 Población expuesta', '🏗️ Edificaciones', '⛰️ Amenazas secundarias', '✅ Validación', '🗺️ Mapeo Humanitario', '📚 Aprende', '🔬 Metodología y datos']
 op = st.sidebar.radio('Secciones', SECCIONES)
 st.sidebar.markdown('---')
 st.sidebar.caption('Ensayo: **Rafael Leonardo Ruiz Díaz** · un aporte para entender el sismo')
