@@ -624,14 +624,14 @@ def sec_secundarias():
         items = [('#ffffb2', 'Baja'),
           ('#fd8d3c', 'Media'),
           ('#bd0026', 'Alta')]
-        nota = 'Susceptibilidad = PGA × pendiente, '
-          'calibrada en zona sacudida'
+        nota = ('Susceptibilidad = PGA × pendiente, '
+                'calibrada en zona sacudida')
     elif capa == 'liq.png':
         items = [('#deebf7', 'Baja'),
           ('#6baed6', 'Media'),
           ('#08519c', 'Alta')]
-        nota = 'Licuefacción: valles planos y '
-          'húmedos con sacudida fuerte'
+        nota = ('Licuefacción: valles planos y '
+                'húmedos con sacudida fuerte')
     else:
         items = [('#000000', 'Sin cambio'),
           ('#ff4500', 'Cambio ≥ 2.5 dB')]
