@@ -1,3 +1,9 @@
+# =====================================================================
+# Observatorio Sísmico Interactivo: Colombia 2026
+# Autor: Rafael Leonardo Ruiz Díaz
+# Tech Stack: Streamlit, Folium, Pydeck, Plotly, GeoPandas, OpenStreetMap
+# =====================================================================
+
 import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
@@ -5,7 +11,7 @@ import numpy as np
 import json, os, struct, math
 import requests
 import matplotlib
-matplotlib.use('Agg')
+matplotlib.use('Agg') # Usar backend no interactivo para matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 import plotly.express as px
@@ -13,33 +19,31 @@ import plotly.graph_objects as go
 from matplotlib import cm
 from matplotlib.colors import Normalize, to_hex
 
-# IMPORTACIONES PARA LEAFLET Y 3D
+# Importaciones para mapas interactivos Leaflet y 3D
 import folium
 from streamlit_folium import st_folium
 import branca.colormap as bcm
 import pydeck as pdk
 
-try:
-    from matplotlib import colormaps as _m
-    CMAP = _m['Reds']
-except Exception:
-    CMAP = cm.get_cmap('Reds')
-
+# Configuración inicial de la página
 st.set_page_config(
   page_title='Observatorio Sismo Colombia 2026',
   page_icon='🌋', layout='wide')
-D = 'data'
+D = 'data' # Carpeta base de datos
 
+# Cargar estilos CSS personalizados si existen
 if os.path.exists('style.css'):
     st.markdown('<style>' +
       open('style.css', encoding='utf-8').read() + '</style>',
       unsafe_allow_html=True)
 
-# ---------- carga defensiva ----------
+# =====================================================================
+# FUNCIONES DE CARGA DEFENSIVA (Manejo de errores y codificación)
+# =====================================================================
 def csv_(n):
+    """Carga archivos CSV con manejo de errores de codificación UTF-8/Latin-1."""
     p = f'{D}/{n}'
-    if not os.path.exists(p):
-        return pd.DataFrame()
+    if not os.path.exists(p): return pd.DataFrame()
     try:
         return pd.read_csv(p, encoding='utf-8')
     except Exception:
@@ -49,9 +53,9 @@ def csv_(n):
             return pd.DataFrame()
 
 def geo_(n):
+    """Carga archivos GeoJSON asegurando que tengan coordenadas válidas."""
     p = f'{D}/{n}'
-    if not os.path.exists(p):
-        return {'type': 'FeatureCollection', 'features': []}
+    if not os.path.exists(p): return {'type': 'FeatureCollection', 'features': []}
     try:
         g = json.load(open(p, encoding='utf-8'))
         g['features'] = [f for f in g.get('features', []) if 'coordinates' in f.get('geometry', {})]
@@ -59,27 +63,26 @@ def geo_(n):
     except Exception:
         return {'type': 'FeatureCollection', 'features': []}
 
-# ---------- bounds ----------
+# =====================================================================
+# CONFIGURACIÓN DE LÍMITES GEOGRÁFICOS (Bounds)
+# =====================================================================
 bp = f'{D}/bounds.json'
 if os.path.exists(bp):
     W, S, E, N = json.load(open(bp, encoding='utf-8'))['bounds']
 else:
-    W, S, E, N = -79.3, 1.8, -73.1, 7.9
+    W, S, E, N = -79.3, 1.8, -73.1, 7.9 # Límites por defecto de Colombia
 BFLAT = [W, S, E, N]
 
 def bounds_png(png, pngw):
+    """Lee el worldfile (.pngw) para alinear correctamente las imágenes PNG en el mapa."""
     try:
         if not os.path.exists(png) or not os.path.exists(pngw): return None
-        with open(png, 'rb') as f:
-            head = f.read(33)
+        with open(png, 'rb') as f: head = f.read(33)
         w, h = struct.unpack('>II', head[16:24])
-        with open(pngw, encoding='utf-8') as f:
-            v = [float(x) for x in f.read().split()]
+        with open(pngw, encoding='utf-8') as f: v = [float(x) for x in f.read().split()]
         a, d, b, e, c, ff = v
-        left = c - a / 2
-        top = ff - e / 2
-        right = left + a * w
-        bottom = top + e * h
+        left = c - a / 2; top = ff - e / 2
+        right = left + a * w; bottom = top + e * h
         if bottom >= top or left >= right: return None
         return [left, bottom, right, top]
     except Exception:
@@ -88,11 +91,15 @@ def bounds_png(png, pngw):
 BINT = bounds_png(f'{D}/intensity_overlay.png', f'{D}/intensity_overlay.pngw')
 if BINT is None: BINT = BFLAT
 
+# Coordenadas del epicentro
 EPI = [4.903, -76.189]
 
-# ---------- CONSULTA A OPENSTREETMAP (HOT) ----------
+# =====================================================================
+# CONSULTA A OPENSTREETMAP (HOT) - Infraestructura crítica en vivo
+# =====================================================================
 @st.cache_data(show_spinner="Consultando infraestructura crítica en OpenStreetMap (HOT)...")
 def cargar_infra_osm():
+    """Consulta la API de Overpass para obtener hospitales y escuelas del área afectada."""
     overpass_url = "https://overpass-api.de/api/interpreter"
     query = """
     [out:json][timeout:50];
@@ -128,9 +135,12 @@ def cargar_infra_osm():
 
 osm_infra = cargar_infra_osm()
 
-# ---------- CACHÉ DE DATOS ----------
+# =====================================================================
+# CACHÉ DE DATOS LOCALES (CSV y GeoJSON)
+# =====================================================================
 @st.cache_data
 def cargar_datos():
+    """Carga y une los datos de exposición con los límites departamentales para los mapas."""
     d_exp = csv_('exposicion_deptos_MMI6.csv')
     d_mun = csv_('exposicion_municipios_MMI6.csv')
     d_con = csv_('construido_deptos_MMI6.csv')
@@ -144,19 +154,18 @@ def cargar_datos():
     try:
         import geopandas as gpd
         g_dep = gpd.GeoDataFrame.from_features(dep_gj['features'])
+        # Unión espacial para habilitar tooltips interactivos en el mapa
         if not d_exp.empty and 'ADM1_NAME' in d_exp.columns:
             possible_cols = ['ADM1_NAME', 'NOMBRE_DEP', 'NOMBRE', 'DPTO_NOMBRE']
             name_col = None
             for col in possible_cols:
-                if col in g_dep.columns:
-                    name_col = col; break
+                if col in g_dep.columns: name_col = col; break
             if name_col:
                 g_dep['merge_col'] = g_dep[name_col].astype(str).str.upper().str.strip()
                 d_exp['merge_col'] = d_exp['ADM1_NAME'].astype(str).str.upper().str.strip()
                 d_exp_clean = d_exp[['merge_col', 'pob_MMI6plus']].rename(columns={'pob_MMI6plus': 'Pob_Exp'})
                 g_dep = g_dep.merge(d_exp_clean, on='merge_col', how='left')
-                if name_col != 'ADM1_NAME':
-                    g_dep['ADM1_NAME'] = g_dep[name_col]
+                if name_col != 'ADM1_NAME': g_dep['ADM1_NAME'] = g_dep[name_col]
     except Exception:
         g_dep = None
         
@@ -166,6 +175,7 @@ d_exp, d_mun, d_con, d_sec, d_ciu, d_est, rep, sint, g_dep = cargar_datos()
 
 AUTOR = ('Ensayo desarrollado por <b>Rafael Leonardo Ruiz Díaz</b> · un aporte para entender el sismo')
 
+# Escala de Mercalli Modificada (MMI)
 MMI = [
   ('IV', '#67a3ff', 'Moderado', 'Vibración como el paso de un camión.'),
   ('V', '#2ee6a8', 'Fuerte', 'Despierta a dormidos; caen objetos.'),
@@ -174,8 +184,11 @@ MMI = [
   ('VIII', '#fb8b2c', 'Severo', 'Daño considerable; pánico.'),
   ('IX', '#e31a1c', 'Violento', 'Colapsos parciales y totales.')]
 
-# ---------- HELPERS Y FORMATO ----------
+# =====================================================================
+# HELPERS Y FORMATO ESPAÑOL
+# =====================================================================
 def fmt(x, dec=0):
+    """Formatea números al estilo español: 1.234.567,89"""
     if pd.isna(x) or x is None: return '0'
     s = f"{x:,.{dec}f}"
     return s.replace(",", "X").replace(".", ",").replace("X", ".")
@@ -188,18 +201,22 @@ def lectura(txt):
     st.markdown('<div class="lectura">' + txt + '</div>', unsafe_allow_html=True)
 
 def chart_cfg(fig):
-    # Corrección: removido locale='es' por incompatibilidad con Plotly 6.9
+    """Aplica configuración visual estandarizada a los gráficos de Plotly."""
     fig.update_layout(
         template='plotly_white',
         font=dict(family='Inter', size=12, color='#12263f'),
         margin=dict(l=20, r=20, t=50, b=20),
-        separators='.,'
+        separators='.,' # Forzar comas para decimales y puntos para miles
     )
 
-# ---------- MAPA LEAFLET INTERACTIVO ----------
+# =====================================================================
+# MAPA LEAFLET INTERACTIVO
+# =====================================================================
 def mapa_interactivo(titulo, capa=None, bb=None, coro=None, items=None, nota=None, puntos=None, infra=None):
+    """Genera un mapa Folium con capas, overlays, coropletas y marcadores interactivos."""
     m = folium.Map(location=[EPI[0], EPI[1]], zoom_start=6, tiles='CartoDB positron', control_scale=True)
 
+    # 1. Capa GeoJSON (Límites o Coropleta)
     if g_dep is not None:
         if coro is None:
             folium.GeoJson(
@@ -209,10 +226,8 @@ def mapa_interactivo(titulo, capa=None, bb=None, coro=None, items=None, nota=Non
             ).add_to(m)
         else:
             g_dep_temp = g_dep.copy()
-            if 'Pob_Exp' not in g_dep_temp.columns: 
-                g_dep_temp['Pob_Exp'] = coro
-            else: 
-                g_dep_temp['Pob_Exp'] = g_dep_temp['Pob_Exp'].fillna(0)
+            if 'Pob_Exp' not in g_dep_temp.columns: g_dep_temp['Pob_Exp'] = coro
+            else: g_dep_temp['Pob_Exp'] = g_dep_temp['Pob_Exp'].fillna(0)
             
             g_dep_temp['Pob_Exp_Fmt'] = g_dep_temp['Pob_Exp'].apply(lambda v: fmt(v))
             
@@ -223,14 +238,14 @@ def mapa_interactivo(titulo, capa=None, bb=None, coro=None, items=None, nota=Non
                 style_function=lambda feature: {'fillColor': colormap(feature['properties'].get('Pob_Exp', 0)), 'color': '#8895a8', 'weight': 0.5, 'fillOpacity': 0.7},
                 tooltip=folium.GeoJsonTooltip(
                     fields=['ADM1_NAME', 'Pob_Exp_Fmt'] if 'ADM1_NAME' in g_dep_temp.columns else ['Pob_Exp_Fmt'], 
-                    aliases=['Departamento:', 'Pob. Expuesta:'],
-                    localize=True, sticky=False, labels=True,
+                    aliases=['Departamento:', 'Pob. Expuesta:'], localize=True, sticky=False, labels=True,
                     style="background-color: #F0EFEF; border: 2px solid black; border-radius: 3px; box-shadow: 3px;",
                     max_width=800
                 )
             ).add_to(m)
             m.add_child(colormap)
 
+    # 2. Capa de Imagen (Overlay PNG)
     if capa:
         p = f'{D}/{capa}'
         if os.path.exists(p):
@@ -241,12 +256,14 @@ def mapa_interactivo(titulo, capa=None, bb=None, coro=None, items=None, nota=Non
             m.fit_bounds(bounds)
         else: st.caption('⚠️ Falta: ' + capa)
 
+    # 3. Marcadores de Réplicas
     if puntos:
         fg_rep = folium.FeatureGroup(name='♻️ Réplicas')
         for lon, lat, r in puntos:
             folium.CircleMarker(location=[lat, lon], radius=r, color='white', weight=0.6, fill=True, fill_color='#d10000', fill_opacity=0.7).add_to(fg_rep)
         fg_rep.add_to(m)
 
+    # 4. Marcadores de Infraestructura (HOT/OSM)
     if infra:
         fg_hosp = folium.FeatureGroup(name='🏥 Hospitales (OSM)')
         fg_esc = folium.FeatureGroup(name='🏫 Escuelas (OSM)')
@@ -256,8 +273,10 @@ def mapa_interactivo(titulo, capa=None, bb=None, coro=None, items=None, nota=Non
             else: marker.add_to(fg_esc)
         fg_hosp.add_to(m); fg_esc.add_to(m)
 
+    # 5. Marcador del Epicentro
     folium.Marker(location=[EPI[0], EPI[1]], tooltip='Epicentro (M7.4)', icon=folium.Icon(color='red', icon='star', prefix='fa')).add_to(m)
 
+    # 6. Leyenda HTML personalizada flotante
     if items:
         legend_html = """<div style="position: fixed; bottom: 40px; left: 40px; z-index: 9999; background-color: white; padding: 10px; border-radius: 5px; border: 1px solid #8895a8; box-shadow: 2px 2px 5px rgba(0,0,0,0.2);"><h6 style="margin:0 0 5px 0; color:#0b1f3a; font-weight:bold;">""" + titulo + """</h6>"""
         for c, t in items:
@@ -266,13 +285,20 @@ def mapa_interactivo(titulo, capa=None, bb=None, coro=None, items=None, nota=Non
         legend_html += "</div>"
         m.get_root().html.add_child(folium.Element(legend_html))
 
+    # 7. Control de capas
     folium.LayerControl(collapsed=False).add_to(m)
+    
+    # Renderizar mapa en Streamlit (height=500 para diseño responsive)
     st_folium(m, width=None, height=500, returned_objects=[])
 
-# ---------- SECCIONES ----------
+# =====================================================================
+# SECCIONES DE LA APP
+# =====================================================================
 def sec_inicio():
     st.markdown('<div class="hero"><h1 style="color:#ffffff !important;">Terremoto de Colombia M7.4</h1><p>Observatorio ciudadano de exposición y riesgo · 10 de agosto de 2026</p><span class="badge">USGS ShakeMap</span><span class="badge">WorldPop</span><span class="badge">HOT / OpenStreetMap</span><div class="autor">' + AUTOR + '</div></div>', unsafe_allow_html=True)
     lectura('<b>¿Qué es este sitio?</b> Un panel interactivo que traduce los datos técnicos del sismo en información comprensible: cuántas personas sintieron el temblor, qué zonas pueden sufrir deslizamientos y qué ciudades deben priorizar revisiones.')
+    
+    # Métricas clave
     tot = suma(d_exp, 'pob_MMI6plus'); km2 = suma(d_con, 'km2_const_MMI6')
     n_dep = int((d_exp.pob_MMI6plus > 0).sum()) if not d_exp.empty else 0
     n_mun = int((d_mun.pob_MMI6plus > 0).sum()) if not d_mun.empty else 0
@@ -280,6 +306,7 @@ def sec_inicio():
     c1.metric('Personas con sacudida fuerte', fmt(tot)); c2.metric('Departamentos afectados', fmt(n_dep))
     c3.metric('Municipios afectados', fmt(n_mun)); c4.metric('km² urbanos expuestos', fmt(km2))
     st.markdown('---')
+    
     mapa_interactivo('Intensidad (MMI)', capa='intensity_overlay.png', bb=BINT, items=[(x[1], x[0] + ' ' + x[2]) for x in MMI], nota='Render oficial USGS ShakeMap · estrella = epicentro', infra=osm_infra)
     lectura('<b>Cómo leer el mapa:</b> los colores cálidos (amarillo→rojo) indican sacudida más fuerte; la estrella es el epicentro. Activa las capas de hospitales y escuelas en la esquina superior derecha para ver la infraestructura expuesta.')
 
@@ -291,6 +318,7 @@ def sec_sismo():
     with b: st.metric('Epicentro', '4,90°N, 76,19°O'); st.metric('Fecha', '10-ago-2026')
     st.markdown('---'); st.subheader('Réplicas')
     if sint: st.warning('Catálogo ilustrativo (Omori–GR): la API del USGS aún no publica réplicas.')
+    
     feats = rep.get('features', [])
     if feats:
         mags = [f['properties']['mag'] for f in feats]; t_h = [f['properties'].get('time_h', 0) for f in feats]
@@ -311,18 +339,23 @@ def sec_3d():
     st.title('⛰️ Modelo de Elevación 3D Interactivo')
     lectura('<b>Idea clave:</b> la compleja topografía de la región (la Cordillera Occidental de los Andes bajando hacia el Océano Pacífico) influye en cómo se propagan las ondas sísmicas y en la susceptibilidad a deslizamientos. Explora el terreno en 3D.')
     
+    # Configuración de la cámara 3D
     view_state = pdk.ViewState(
         latitude=EPI[0], longitude=EPI[1], zoom=8.5, pitch=65, bearing=45
     )
 
+    # Capa de terreno 3D. Se usan bounds y mesh_max_error para evitar picos de ruido en la malla.
     terrain_layer = pdk.Layer(
         "TerrainLayer",
         elevation_data="https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png",
         texture="https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
         elevation_decoder={"rScaler": 256, "gScaler": 1, "bScaler": 1/256, "offset": -32768},
+        bounds=[W, S, E, N],     # Limita la carga a la caja de coordenadas
+        mesh_max_error=50.0,     # Suaviza la malla para eliminar picos anormales
         opacity=1
     )
 
+    # Marcador rojo del epicentro flotando a 5000m de altura
     scatter_data = [{'lat': EPI[0], 'lon': EPI[1], 'z': 5000}]
     epicenter_layer = pdk.Layer(
         "ScatterplotLayer", data=scatter_data, get_position=['lon', 'lat', 'z'],
@@ -335,14 +368,17 @@ def sec_3d():
     )
 
     st.pydeck_chart(r)
-    st.caption('💡 **Consejo:** Haz clic y arrastra para rotar la vista. Usa la rueda del ratón para hacer zoom. Las montañas oscuras al oeste son la selva del Chocó y la costa pacífica.')
+    st.caption('💡 **Consejo:** Haz clic y arrastra para rotar la vista. Usa la rueda del ratón para hacer zoom. Las montañas oscuras al oeste son la selva del Chocó y la cordillera de los Andes.')
 
 def sec_comparativa():
     st.title('🆚 Dos sismos, dos historias')
     lectura('<b>Más allá de la magnitud:</b> por qué sismos de tamaño similar pueden generar impactos radicalmente diferentes. De la roca a la ciudad.')
     a, b = st.columns(2)
+    # Caso Colombia
     with a: st.markdown('<div class="card card-col"><h3>🏔️ Caso Colombia · 10-ago-2026</h3><b>Mw 7.4 · Profundidad ~107 km</b><ul class="mini"><li><b>Ruptura profunda:</b> mayor recorrido de las ondas hasta la superficie.</li><li><b>Mayor dispersión:</b> las ondas se atenúan significativamente antes de llegar.</li><li><b>Área afectada:</b> movimiento perceptible en una región muy extensa, con menor violencia puntual.</li></ul></div>', unsafe_allow_html=True)
+    # Caso Venezuela (Fecha corregida a 24-jun-2026)
     with b: st.markdown('<div class="card card-ven"><h3>🏙️ Caso Venezuela · 24-jun-2026</h3><b>Doblete Mw 7.2 + 7.5 · ~10–20 km</b><ul class="mini"><li><b>Ruptura somera:</b> muy próxima a zonas urbanas.</li><li><b>Menor atenuación:</b> las ondas golpean con mayor energía.</li><li><b>Doblete sísmico:</b> dos demandas sucesivas sobre estructuras posiblemente degradadas por el primer evento.</li></ul></div>', unsafe_allow_html=True)
+    
     st.markdown('---'); c1, c2 = st.columns(2)
     with c1:
         fig = px.bar(x=['Colombia', 'Venezuela'], y=[107, 15], labels={'y': 'Profundidad (km)', 'x': ''}, title='Profundidad del hipocentro', color=['Colombia', 'Venezuela'], color_discrete_map={'Colombia': '#2563eb', 'Venezuela': '#ea580c'})
@@ -356,15 +392,18 @@ def sec_comparativa():
         fig.update_layout(title='Atenuación con la distancia (esquemático)', xaxis_title='Distancia a la ruptura (km)', yaxis_title='Sacudida relativa')
         chart_cfg(fig); st.plotly_chart(fig, width='stretch')
     st.caption('Gráfico esquemático didáctico: un sismo somero concentra daño extremo cerca de la falla; uno profundo reparte sacudida moderada en un área amplia.')
+    
     st.subheader('El suelo transforma la sacudida')
     a, b = st.columns(2)
     with a: st.markdown('<div class="card card-suelo"><h3>🏜️ Cuenca y topografía</h3><ul class="mini"><li>El contraste de rigidez de los estratos refleja, refracta y filtra las ondas.</li><li><b>Depósitos blandos:</b> posible amplificación y mayor duración.</li><li><b>Cuencas:</b> reflejo y atrapamiento de ondas.</li><li><b>Relieves:</b> concentración o dispersión según su geometría.</li></ul></div>', unsafe_allow_html=True)
     with b: st.markdown('<div class="card card-suelo"><h3>💦 Licuación de suelos</h3><ul class="mini"><li>Pérdida súbita de resistencia del terreno.</li><li>Requiere: suelo granular suelto + saturación de agua + demanda cíclica fuerte.</li><li>Las estructuras pueden hundirse o inclinarse por pérdida de soporte.</li></ul></div>', unsafe_allow_html=True)
+        
     st.subheader('Cada estructura "escucha" un sismo diferente')
     a, b, c = st.columns(3)
     with a: st.markdown('<div class="card card-col"><h3>🏠 Bajas (1–3 pisos)</h3><p class="mini">Responden con mayor fuerza a ondas de periodo corto (alta frecuencia, ~0.3 s).</p></div>', unsafe_allow_html=True)
     with b: st.markdown('<div class="card card-col"><h3>🏢 Medianas</h3><p class="mini">Más sensibles a ondas de periodo intermedio (~1.0 s).</p></div>', unsafe_allow_html=True)
     with c: st.markdown('<div class="card card-col"><h3>🏙️ Altas</h3><p class="mini">Entran en resonancia con ondas de periodo largo (baja frecuencia, ~3.0 s).</p></div>', unsafe_allow_html=True)
+        
     lectura('<b>Compatibilidad espectral:</b> si el suelo amplifica periodos cercanos al periodo natural de una estructura, su respuesta y el daño pueden aumentar dramáticamente. <b>Misma magnitud ≠ misma demanda</b> para todos los edificios.')
     st.markdown('<div class="risk-banner">Riesgo Sísmico = Amenaza × Exposición × Vulnerabilidad</div>', unsafe_allow_html=True)
 
@@ -417,6 +456,7 @@ def sec_edificaciones():
             if rr.empty: continue
             r = rr.iloc[0]
             fig.add_trace(go.Scatter(x=TS, y=[r[k] for k in cols], mode='lines+markers', name=c))
+        # Líneas verticales para mostrar resonancia según tipo de estructura
         fig.add_vline(x=0.3, line_width=2, line_dash="dash", line_color="blue")
         fig.add_annotation(x=0.3, y=0.1, text="Casas (0,3s)", textangle=-90, font=dict(color="blue", size=10))
         fig.add_vline(x=1.0, line_width=2, line_dash="dash", line_color="orange")
@@ -426,6 +466,7 @@ def sec_edificaciones():
         fig.update_layout(xaxis_type='log', yaxis_type='log', xaxis_title='Período (s)', yaxis_title='Sa (%g)', title='Espectros de respuesta con resonancia estructural')
         chart_cfg(fig); st.plotly_chart(fig, width='stretch')
         
+        # Tabla formateada en español
         d_ciu_fmt = d_ciu.sort_values('psa03', ascending=False).copy()
         num_cols = d_ciu_fmt.select_dtypes(include=['float', 'int']).columns
         for col in num_cols:
@@ -476,6 +517,7 @@ def sec_hotosm():
     st.subheader('Mapa de Respuesta Humanitaria')
     st.caption('Organizado por **OSM Colombia** con apoyo de **UN Mappers Argentina** y **HOT**')
     
+    # Iframe de uMap responsivo
     hotosm_iframe = """
     <div style="width:100%; position:relative; padding-bottom:56.25%; height:0; overflow:hidden; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
         <iframe src="https://umap.hotosm.org/en/map/colombia-m-74-earthquake-10-ago-2026_3482?scaleControl=false&miniMap=false&scrollWheelZoom=false&zoomControl=true&allowEdit=false&moreControl=true&searchControl=false&tilelayersControl=null&embedControl=null&datalayersControl=true&onLoadPanel=none&captionBar=false&captionMenus=true" 
@@ -533,7 +575,9 @@ def sec_metodologia():
                 try: st.download_button(f, open(f'{D}/{f}', 'rb').read(), file_name=f, key=f)
                 except Exception: pass
 
-# ---------- NAVEGACIÓN ----------
+# =====================================================================
+# NAVEGACIÓN DE LA APP
+# =====================================================================
 st.sidebar.title('🌋 Observatorio')
 st.sidebar.caption('Sismo M7.4 · Colombia')
 SECCIONES = ['🏠 Inicio', '🌍 El sismo', '🧊 Modelo 3D', '🆚 Colombia vs Venezuela', '🎯 Intensidad (MMI)', '👥 Población expuesta', '🏗️ Edificaciones', '⛰️ Amenazas secundarias', '✅ Validación', '🗺️ Mapeo Humanitario', '📚 Aprende', '🔬 Metodología y datos']
