@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import json, os
 import folium
+from folium import raster_layers
 import plotly.express as px
 import plotly.graph_objects as go
 from streamlit_folium import st_folium
@@ -20,12 +21,16 @@ st.set_page_config(
   layout='wide')
 D = 'data'
 
+# ---------- carga defensiva ----------
 def csv_(n):
     p = f'{D}/{n}'
     if not os.path.exists(p):
         return pd.DataFrame()
     try:
-        return pd.read_csv(p)
+        df = pd.read_csv(p)
+        if df.empty:
+            return pd.DataFrame()
+        return df
     except Exception:
         return pd.DataFrame()
 
@@ -35,7 +40,18 @@ def geo_(n):
         return {'type': 'FeatureCollection',
                 'features': []}
     try:
-        return json.load(open(p))
+        g = json.load(open(p))
+        # filtrar features sin coordinates
+        feats = []
+        for f in g.get('features', []):
+            try:
+                ge = f.get('geometry', {})
+                if 'coordinates' in ge:
+                    feats.append(f)
+            except Exception:
+                pass
+        g['features'] = feats
+        return g
     except Exception:
         return {'type': 'FeatureCollection',
                 'features': []}
@@ -86,7 +102,7 @@ def mapa_base(zoom=7):
 def overlay(m, png, op_=0.7):
     p = f'{D}/{png}'
     if os.path.exists(p):
-        folium.ImageOverlay(
+        raster_layers.ImageOverlay(
           p, bounds=BOUNDS,
           opacity=op_).add_to(m)
 
@@ -133,7 +149,7 @@ if op == 'Resumen ejecutivo':
           yaxis_title='',
           xaxis_title='Personas')
         st.plotly_chart(fig,
-          use_container_width=True)
+          width='stretch')
 
 # ============ 2. SISMOLOGÍA ============
 elif op == 'Sismología':
@@ -169,7 +185,7 @@ elif op == 'Sismología':
                 'sismo', 'y': 'Magnitud'},
               title='Réplicas en el tiempo')
             st.plotly_chart(fig,
-              use_container_width=True)
+              width='stretch')
         with b:
             fig = px.histogram(x=mags,
               nbins=20,
@@ -177,7 +193,7 @@ elif op == 'Sismología':
               title='Frecuencia–magnitud '
               '(Gutenberg–Richter)')
             st.plotly_chart(fig,
-              use_container_width=True)
+              width='stretch')
 
 # ============ 3. POBLACIÓN ============
 elif op == 'Población':
@@ -212,7 +228,7 @@ elif op == 'Población':
               orientation='h',
               title='Top municipios expuestos')
             st.plotly_chart(fig,
-              use_container_width=True)
+              width='stretch')
     with b:
         if not d_con.empty:
             fig = px.bar(
@@ -222,7 +238,7 @@ elif op == 'Población':
               y='ADM1_NAME', orientation='h',
               title='km² construidos (MMI≥6)')
             st.plotly_chart(fig,
-              use_container_width=True)
+              width='stretch')
 
 # ============ 4. INGENIERÍA ============
 elif op == 'Ingeniería':
@@ -257,11 +273,11 @@ elif op == 'Ingeniería':
           yaxis_title='Sa (%g)',
           title='Espectros de respuesta')
         st.plotly_chart(fig,
-          use_container_width=True)
+          width='stretch')
         st.dataframe(
           d_ciu.sort_values(
             'psa03', ascending=False),
-          use_container_width=True)
+          width='stretch')
 
 # ============ 5. SECUNDARIAS ============
 elif op == 'Amenazas secundarias':
@@ -287,7 +303,7 @@ elif op == 'Amenazas secundarias':
               title='km² susceptibles a '
               'deslizamientos')
             st.plotly_chart(fig,
-              use_container_width=True)
+              width='stretch')
         with b:
             fig = px.bar(
               d_sec.sort_values(
@@ -297,7 +313,7 @@ elif op == 'Amenazas secundarias':
               title='km² susceptibles a '
               'licuefacción')
             st.plotly_chart(fig,
-              use_container_width=True)
+              width='stretch')
 
 # ============ 6. VALIDACIÓN ============
 elif op == 'Validación':
@@ -334,7 +350,7 @@ elif op == 'Validación':
               mode='lines', name='1:1',
               line={'dash': 'dash'}))
             st.plotly_chart(fig,
-              use_container_width=True)
+              width='stretch')
         with b:
             fig = px.scatter(d_est,
               x='dist_km', y='pga_obs',
@@ -351,7 +367,7 @@ elif op == 'Validación':
               name='modelado',
               marker={'symbol': 'x'}))
             st.plotly_chart(fig,
-              use_container_width=True)
+              width='stretch')
 
 # ============ 7. METODOLOGÍA ============
 elif op == 'Metodología':
@@ -381,6 +397,10 @@ elif op == 'Metodología':
     if os.path.exists(D):
         for f in sorted(os.listdir(D)):
             if f.endswith('.csv'):
-                st.download_button(
-                    f, open(f'{D}/{f}', 'rb').read(),
-                    file_name=f, key=f)
+                try:
+                    st.download_button(
+                        f,
+                        open(f'{D}/{f}', 'rb').read(),
+                        file_name=f, key=f)
+                except Exception:
+                    pass
