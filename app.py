@@ -338,7 +338,7 @@ def sec_comparativa():
           '</ul></div>', unsafe_allow_html=True)
     with b:
         st.markdown('<div class="card card-ven">'
-          '<h3>🏙️ Caso Venezuela · 4-jun-2026</h3>'
+          '<h3>🏙️ Caso Venezuela · 24-jun-2026</h3>'
           '<b>Doblete Mw 7.2 + 7.5 · ~10–20 km</b>'
           '<ul class="mini">'
           '<li><b>Ruptura somera:</b> muy próxima a '
