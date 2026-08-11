@@ -1,4 +1,3 @@
-
 import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
@@ -178,7 +177,6 @@ MMI = [
 def fmt(x, dec=0):
     if pd.isna(x) or x is None: return '0'
     s = f"{x:,.{dec}f}"
-    # Intercambiamos comas y puntos temporalmente para formato hispano
     return s.replace(",", "X").replace(".", ",").replace("X", ".")
 
 def suma(df, col):
@@ -193,7 +191,6 @@ def chart_cfg(fig):
         template='plotly_white',
         font=dict(family='Inter', size=12, color='#12263f'),
         margin=dict(l=20, r=20, t=50, b=20),
-        # Formato español para Plotly (puntos para miles, comas para decimales)
         separators='.,', 
         locale='es'
     )
@@ -216,7 +213,6 @@ def mapa_interactivo(titulo, capa=None, bb=None, coro=None, items=None, nota=Non
             else: 
                 g_dep_temp['Pob_Exp'] = g_dep_temp['Pob_Exp'].fillna(0)
             
-            # Columna formateada para el tooltip del mapa
             g_dep_temp['Pob_Exp_Fmt'] = g_dep_temp['Pob_Exp'].apply(lambda v: fmt(v))
             
             max_v = max(coro) if max(coro) > 0 else 1
@@ -270,8 +266,6 @@ def mapa_interactivo(titulo, capa=None, bb=None, coro=None, items=None, nota=Non
         m.get_root().html.add_child(folium.Element(legend_html))
 
     folium.LayerControl(collapsed=False).add_to(m)
-    
-    # Altura responsiva adaptada para móviles (500px)
     st_folium(m, width=None, height=500, returned_objects=[])
 
 # ---------- SECCIONES ----------
@@ -307,10 +301,10 @@ def sec_sismo():
         c1, c2 = st.columns(2)
         with c1:
             fig = px.scatter(x=t_h, y=mags, labels={'x': 'Horas desde el sismo', 'y': 'Magnitud'}, title='Réplicas en el tiempo')
-            chart_cfg(fig); st.plotly_chart(fig, use_container_width=True)
+            chart_cfg(fig); st.plotly_chart(fig, width='stretch')
         with c2:
             fig = px.histogram(x=mags, nbins=20, labels={'x': 'Magnitud'}, title='Frecuencia–magnitud')
-            chart_cfg(fig); st.plotly_chart(fig, use_container_width=True)
+            chart_cfg(fig); st.plotly_chart(fig, width='stretch')
 
 def sec_comparativa():
     st.title('🆚 Dos sismos, dos historias')
@@ -321,7 +315,7 @@ def sec_comparativa():
     st.markdown('---'); c1, c2 = st.columns(2)
     with c1:
         fig = px.bar(x=['Colombia', 'Venezuela'], y=[107, 15], labels={'y': 'Profundidad (km)', 'x': ''}, title='Profundidad del hipocentro', color=['Colombia', 'Venezuela'], color_discrete_map={'Colombia': '#2563eb', 'Venezuela': '#ea580c'})
-        chart_cfg(fig); st.plotly_chart(fig, use_container_width=True)
+        chart_cfg(fig); st.plotly_chart(fig, width='stretch')
     with c2:
         ds = list(range(10, 301, 10))
         som = [120 * math.exp(-d / 90) + 4 for d in ds]; prof = [70 * math.exp(-d / 160) + 3 for d in ds]
@@ -329,7 +323,7 @@ def sec_comparativa():
         fig.add_trace(go.Scatter(x=ds, y=som, mode='lines', name='Somero (VEN)', line={'color': '#ea580c', 'width': 3}))
         fig.add_trace(go.Scatter(x=ds, y=prof, mode='lines', name='Profundo (COL)', line={'color': '#2563eb', 'width': 3}))
         fig.update_layout(title='Atenuación con la distancia (esquemático)', xaxis_title='Distancia a la ruptura (km)', yaxis_title='Sacudida relativa')
-        chart_cfg(fig); st.plotly_chart(fig, use_container_width=True)
+        chart_cfg(fig); st.plotly_chart(fig, width='stretch')
     st.caption('Gráfico esquemático didáctico: un sismo somero concentra daño extremo cerca de la falla; uno profundo reparte sacudida moderada en un área amplia.')
     st.subheader('El suelo transforma la sacudida')
     a, b = st.columns(2)
@@ -367,12 +361,12 @@ def sec_poblacion():
         if not d_exp.empty:
             top = d_exp.sort_values('pob_MMI6plus').tail(10)
             fig = px.bar(top, x='pob_MMI6plus', y='ADM1_NAME', orientation='h', color='pob_MMI6plus', color_continuous_scale='Reds', title='Departamentos más expuestos')
-            chart_cfg(fig); st.plotly_chart(fig, use_container_width=True)
+            chart_cfg(fig); st.plotly_chart(fig, width='stretch')
     with b:
         if not d_mun.empty:
             top = d_mun.sort_values('pob_MMI6plus').tail(15)
             fig = px.bar(top, x='pob_MMI6plus', y='ADM2_NAME', orientation='h', title='Municipios más expuestos')
-            chart_cfg(fig); st.plotly_chart(fig, use_container_width=True)
+            chart_cfg(fig); st.plotly_chart(fig, width='stretch')
 
 def sec_edificaciones():
     st.title('🏗️ Edificaciones e ingeniería')
@@ -380,7 +374,7 @@ def sec_edificaciones():
     km2 = suma(d_con, 'km2_const_MMI6'); st.metric('km² urbanos en MMI ≥ 6', fmt(km2))
     if not d_con.empty:
         fig = px.bar(d_con.sort_values('km2_const_MMI6').tail(10), x='km2_const_MMI6', y='ADM1_NAME', orientation='h', title='Huella urbana expuesta por departamento')
-        chart_cfg(fig); st.plotly_chart(fig, use_container_width=True)
+        chart_cfg(fig); st.plotly_chart(fig, width='stretch')
     st.markdown('---'); st.subheader('Espectros de respuesta por ciudad')
     if not d_ciu.empty:
         opts = d_ciu.ciudad.tolist(); defs = [o for o in ['Cali', 'Pereira', 'Manizales', 'Bogota'] if o in opts]
@@ -399,14 +393,13 @@ def sec_edificaciones():
         fig.add_vline(x=3.0, line_width=2, line_dash="dash", line_color="red")
         fig.add_annotation(x=3.0, y=0.1, text="Torres (3,0s)", textangle=-90, font=dict(color="red", size=10))
         fig.update_layout(xaxis_type='log', yaxis_type='log', xaxis_title='Período (s)', yaxis_title='Sa (%g)', title='Espectros de respuesta con resonancia estructural')
-        chart_cfg(fig); st.plotly_chart(fig, use_container_width=True)
+        chart_cfg(fig); st.plotly_chart(fig, width='stretch')
         
-        # Formatear el DataFrame antes de mostrarlo
         d_ciu_fmt = d_ciu.sort_values('psa03', ascending=False).copy()
         num_cols = d_ciu_fmt.select_dtypes(include=['float', 'int']).columns
         for col in num_cols:
             d_ciu_fmt[col] = d_ciu_fmt[col].apply(lambda x: fmt(x, 2) if pd.notna(x) else x)
-        st.dataframe(d_ciu_fmt, use_container_width=True)
+        st.dataframe(d_ciu_fmt, width='stretch')
 
 def sec_secundarias():
     st.title('⛰️ Deslizamientos y licuefacción')
@@ -423,10 +416,10 @@ def sec_secundarias():
         a, b = st.columns(2)
         with a:
             fig = px.bar(d_sec.sort_values('km2_desliz').tail(10), x='km2_desliz', y='ADM1_NAME', orientation='h', title='km² susceptibles a deslizamientos')
-            chart_cfg(fig); st.plotly_chart(fig, use_container_width=True)
+            chart_cfg(fig); st.plotly_chart(fig, width='stretch')
         with b:
             fig = px.bar(d_sec.sort_values('km2_liq').tail(10), x='km2_liq', y='ADM1_NAME', orientation='h', title='km² susceptibles a licuefacción')
-            chart_cfg(fig); st.plotly_chart(fig, use_container_width=True)
+            chart_cfg(fig); st.plotly_chart(fig, width='stretch')
 
 def sec_validacion():
     st.title('✅ Validación del modelo')
@@ -440,11 +433,11 @@ def sec_validacion():
             fig = px.scatter(d_est, x='pga_mod', y='pga_obs', log_x=True, log_y=True, labels={'pga_mod': 'PGA modelado (%g)', 'pga_obs': 'PGA observado (%g)'}, title='Observado vs modelado')
             mx = float(max(d_est.pga_obs.max(), d_est.pga_mod.max())); mn = max(0.01, float(min(d_est.pga_obs.min(), d_est.pga_mod.min())))
             fig.add_trace(go.Scatter(x=[mn, mx], y=[mn, mx], mode='lines', name='1:1', line={'dash': 'dash'}))
-            chart_cfg(fig); st.plotly_chart(fig, use_container_width=True)
+            chart_cfg(fig); st.plotly_chart(fig, width='stretch')
         with b:
             fig = px.scatter(d_est, x='dist_km', y='pga_obs', log_y=True, labels={'dist_km': 'Distancia epicentral (km)', 'pga_obs': 'PGA observado (%g)'}, title='Atenuación con distancia')
             fig.add_trace(go.Scatter(x=d_est.dist_km, y=d_est.pga_mod, mode='markers', name='modelado', marker={'symbol': 'x'}))
-            chart_cfg(fig); st.plotly_chart(fig, use_container_width=True)
+            chart_cfg(fig); st.plotly_chart(fig, width='stretch')
 
 def sec_hotosm():
     st.title('🗺️ Mapeo Humanitario (HOTOSM)')
@@ -452,7 +445,6 @@ def sec_hotosm():
     st.subheader('Mapa de Respuesta Humanitaria')
     st.caption('Organizado por **OSM Colombia** con apoyo de **UN Mappers Argentina** y **HOT**')
     
-    # Iframe responsivo (se ajusta con CSS para móvil)
     hotosm_iframe = """
     <div style="width:100%; position:relative; padding-bottom:56.25%; height:0; overflow:hidden; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
         <iframe src="https://umap.hotosm.org/en/map/colombia-m-74-earthquake-10-ago-2026_3482?scaleControl=false&miniMap=false&scrollWheelZoom=false&zoomControl=true&allowEdit=false&moreControl=true&searchControl=false&tilelayersControl=null&embedControl=null&datalayersControl=true&onLoadPanel=none&captionBar=false&captionMenus=true" 
@@ -464,7 +456,7 @@ def sec_hotosm():
 
     st.markdown('---'); st.subheader('Capas disponibles en el mapa')
     col1, col2, col3 = st.columns(3)
-    with col1: st.markdown('<div class="card card-col"><h3>🗺️ Caplas Base</h3><ul class="mini"><li><b>OpenStreetMap:</b> mapa estándar</li><li><b>Positron:</b> estilo minimalista</li><li><b>Humanitarian:</b> estilo HOT</li><li><b>ESRI:</b> imágenes satelitales</li></ul></div>', unsafe_allow_html=True)
+    with col1: st.markdown('<div class="card card-col"><h3>🗺️ Caplas Base</h3><ul class="mini"><li><b>OpenStreetMap:</b> mapa estándar</li><li><b>Positron:</b> estilo minimalistaf</li><li><b>Humanitarian:</b> estilo HOT</li><li><b>ESRI:</b> imágenes satelitales</li></ul></div>', unsafe_allow_html=True)
     with col2: st.markdown('<div class="card card-suelo"><h3>📊 Datos del Sismo</h3><ul class="mini"><li><b>Epicentro:</b> San José del Palmar</li><li><b>ShakeMap:</b> zonas de intensidad 3.5 a 6.5</li><li><b>AOI:</b> Área de Interés para mapeo</li><li><b>ChatMap:</b> puntos reportados</li></ul></div>', unsafe_allow_html=True)
     with col3: st.markdown('<div class="card card-ven"><h3>🏘️ Poblaciones Cercanas</h3><ul class="mini"><li><b>San José del Palmar:</b> 2.392 hab. (5,9 km)</li><li><b>Ansermanuevo:</b> 12.332 hab. (27,9 km)</li><li><b>Toro:</b> 13.764 hab. (31,4 km)</li><li><b>La Unión:</b> 41.013 hab. (37,9 km)</li><li><b>Pereira:</b> 467.269 hab. (60,7 km)</li></ul></div>', unsafe_allow_html=True)
 
@@ -501,9 +493,8 @@ def sec_metodologia():
         for f in sorted(os.listdir(D)):
             rows.append({'archivo': f, 'KB': round(os.path.getsize(f'{D}/{f}') / 1024, 1)})
         df_archivos = pd.DataFrame(rows)
-        # Formatear la columna KB
         df_archivos['KB'] = df_archivos['KB'].apply(lambda x: fmt(x, 1))
-        st.dataframe(df_archivos, use_container_width=True)
+        st.dataframe(df_archivos, width='stretch')
     st.subheader('Descarga de datos')
     if os.path.exists(D):
         for f in sorted(os.listdir(D)):
