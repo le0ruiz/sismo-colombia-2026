@@ -86,7 +86,14 @@ def bounds_png(png, pngw):
 BINT = bounds_png(
   f'{D}/intensity_overlay.png',
   f'{D}/intensity_overlay.pngw')
-if BINT is None:
+def valida_b(b):
+    try:
+        return (b[0][0] < b[1][0]) and \
+               (b[0][1] < b[1][1])
+    except Exception:
+        return False
+
+if BINT is None or not valida_b(BINT):
     BINT = BOUNDS
 
 EPI = [4.903, -76.189]
@@ -215,9 +222,9 @@ op = st.sidebar.radio('Secciones', [
   '🆚 Colombia vs Venezuela',
   '🎯 Intensidad (MMI)',
   '👥 Población expuesta',
-  '🏗️ Edificaciones',
+  '🏗�?Edificaciones',
   '⛰️ Amenazas secundarias',
-  '✅ Validación',
+  '�?Validación',
   '📚 Aprende',
   '🔬 Metodología y datos'])
 st.sidebar.markdown('---')
@@ -227,7 +234,8 @@ st.sidebar.caption(
 
 # ============ INICIO ============
 if op == '🏠 Inicio':
-    st.markdown('<div class="hero"><h1>'
+    st.markdown('<div class="hero">'
+      '<h1 style="color:#ffffff !important;">'
       'Terremoto de Colombia M7.4</h1>'
       '<p>Observatorio ciudadano de exposición '
       'y riesgo · 10 de agosto de 2026</p>'
@@ -354,7 +362,7 @@ elif op == '🆚 Colombia vs Venezuela':
     with b:
         st.markdown('<div class="card card-ven">'
           '<h3>🇻 Venezuela · 4-jun-2026</h3>'
-          '<b>Doblete Mw 7.2 + 7.5 · ~10–20 km</b>'
+          '<b>Doblete Mw 7.2 + 7.5 · ~10�?0 km</b>'
           '<ul class="mini">'
           '<li>Ruptura somera, muy próxima a zonas '
           'urbanas.</li>'
@@ -410,7 +418,7 @@ elif op == '🆚 Colombia vs Venezuela':
     a, b = st.columns(2)
     with a:
         st.markdown('<div class="card card-suelo">'
-          '<h3>🏜️ Amplificación (cuencas)</h3>'
+          '<h3>🏜�?Amplificación (cuencas)</h3>'
           '<ul class="mini">'
           '<li>Depósitos blandos: mayor amplitud y '
           'duración del movimiento.</li>'
@@ -436,7 +444,7 @@ elif op == '🆚 Colombia vs Venezuela':
     a, b, c = st.columns(3)
     with a:
         st.markdown('<div class="card card-col">'
-          '<h3>🏠 Bajas (1–3 pisos)</h3>'
+          '<h3>🏠 Bajas (1�? pisos)</h3>'
           '<p class="mini">Resuenan con periodos '
           'cortos (~0.3 s): alta frecuencia.</p>'
           '</div>', unsafe_allow_html=True)
@@ -448,7 +456,7 @@ elif op == '🆚 Colombia vs Venezuela':
           unsafe_allow_html=True)
     with c:
         st.markdown('<div class="card card-col">'
-          '<h3>🏙️ Altas</h3>'
+          '<h3>🏙�?Altas</h3>'
           '<p class="mini">Resuenan con periodos '
           'largos (~3.0 s): baja frecuencia.</p>'
           '</div>', unsafe_allow_html=True)
@@ -456,7 +464,7 @@ elif op == '🆚 Colombia vs Venezuela':
       'suelo amplifica periodos cercanos al periodo '
       'natural de una estructura, su respuesta y el '
       'daño pueden aumentar dramáticamente. Misma '
-      'magnitud ≠ misma demanda para todos los '
+      'magnitud �?misma demanda para todos los '
       'edificios.')
     st.markdown('<div class="risk-banner">Riesgo '
       'Sísmico = Amenaza × Exposición × '
@@ -464,14 +472,14 @@ elif op == '🆚 Colombia vs Venezuela':
       unsafe_allow_html=True)
     with st.expander('Factores de vulnerabilidad y '
       'normas'):
-        st.write('• Norma moderna ≠ desempeño: tener '
+        st.write('�?Norma moderna �?desempeño: tener '
           'un código avanzado (NSR-10, COVENIN) es '
           'solo el primer paso; importa su '
           'aplicación real.\n'
-          '• Edad y sistema estructural.\n'
-          '• Calidad de materiales y construcción.\n'
-          '• Detallado dúctil e irregularidades.\n'
-          '• Supervisión de obra y mantenimiento.')
+          '�?Edad y sistema estructural.\n'
+          '�?Calidad de materiales y construcción.\n'
+          '�?Detallado dúctil e irregularidades.\n'
+          '�?Supervisión de obra y mantenimiento.')
 
 # ============ INTENSIDAD ============
 elif op == '🎯 Intensidad (MMI)':
@@ -514,7 +522,7 @@ elif op == '👥 Población expuesta':
       'personas viven en zonas con cada nivel de '
       'sacudida.')
     tot = suma(d_exp, 'pob_MMI6plus')
-    st.metric('Población con MMI ≥ 6', fmt(tot))
+    st.metric('Población con MMI �?6', fmt(tot))
     m = mapa_base()
     if not d_exp.empty:
         nrm = Normalize(0,
@@ -562,15 +570,15 @@ elif op == '👥 Población expuesta':
           'prevención.')
 
 # ============ EDIFICACIONES ============
-elif op == '🏗️ Edificaciones':
-    st.title('🏗️ Edificaciones e ingeniería')
+elif op == '🏗�?Edificaciones':
+    st.title('🏗�?Edificaciones e ingeniería')
     lectura('<b>Idea clave:</b> distintas '
       'estructuras resuenan con distintos períodos. '
       'Las <b>PSA</b> miden la sacudida en cada '
       'período: 0.3 s casas bajas, 1.0 s edificios '
       'medios, 3.0 s puentes y torres.')
     km2 = suma(d_con, 'km2_const_MMI6')
-    st.metric('km² urbanos en MMI ≥ 6', fmt(km2))
+    st.metric('km² urbanos en MMI �?6', fmt(km2))
     if not d_con.empty:
         fig = px.bar(d_con.sort_values(
           'km2_const_MMI6').tail(10),
@@ -614,8 +622,8 @@ elif op == '🏗️ Edificaciones':
           width='stretch')
     with st.expander('¿Cómo leer un espectro?'):
         st.write('Cada línea es una ciudad. Curva '
-          'alta en 0.3 s → sufren más las casas de '
-          '1–3 pisos; alta en 1.0 s → edificios '
+          'alta en 0.3 s �?sufren más las casas de '
+          '1�? pisos; alta en 1.0 s �?edificios '
           'medios. Compara ciudades para priorizar '
           'el tipo de revisión estructural.')
 
@@ -634,7 +642,7 @@ elif op == '⛰️ Amenazas secundarias':
       format_func=lambda x: {
         'desliz.png': '🟠 Deslizamientos',
         'liq.png': '🔵 Licuefacción',
-        'sar.png': '🛰️ Cambio SAR'}[x])
+        'sar.png': '🛰�?Cambio SAR'}[x])
     m = mapa_base()
     overlay(m, capa, 0.75)
     epi(m)
@@ -667,8 +675,8 @@ elif op == '⛰️ Amenazas secundarias':
           'valles aluviales.')
 
 # ============ VALIDACIÓN ============
-elif op == '✅ Validación':
-    st.title('✅ Validación del modelo')
+elif op == '�?Validación':
+    st.title('�?Validación del modelo')
     lectura('<b>Idea clave:</b> comparamos el PGA '
       'modelado por el USGS con el PGA registrado '
       'por estaciones reales. Si los puntos se '
@@ -763,7 +771,7 @@ elif op == '🔬 Metodología y datos':
         "deslizamientos = PGA × pendiente; "
         "licuefacción = PGA × (1−pendiente) × "
         "humedad; calibrado dentro de la zona "
-        "sacudida (MMI ≥ 5).\n\n"
+        "sacudida (MMI �?5).\n\n"
         "**Comparativa regional:** el análisis "
         "Colombia–Venezuela sigue el marco "
         "conceptual Amenaza × Exposición × "

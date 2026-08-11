@@ -1,17 +1,37 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
 
 #MainMenu, footer, header {visibility: hidden;}
-.stApp {background: #f6f8fb !important;
-  font-family: 'Inter', sans-serif;
-  color: #12263f;}
 
-h1 {font-weight: 800 !important;
-  color: #0b1f3a !important;
-  letter-spacing: -0.5px;}
-h2, h3 {font-weight: 600 !important;
+/* fondo claro SIN importar el tema */
+html, body, .stApp,
+[data-testid="stAppViewContainer"],
+section.main {
+  background: #f6f8fb !important;}
+
+/* texto general legible */
+.stApp p, .stApp li, .stApp label {
+  color: #1e2c44 !important;}
+.stApp h1 {font-weight: 800 !important;
+  color: #0b1f3a !important;}
+.stApp h2, .stApp h3 {
+  font-weight: 600 !important;
   color: #14315c !important;}
-p, li, span, label {color: #1e2c44;}
 
+/* sidebar blanco y legible */
+section[data-testid="stSidebar"],
+[data-testid="stSidebar"] > div {
+  background: #ffffff !important;}
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] p,
+[data-testid="stSidebar"] span,
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] caption,
+[data-testid="stSidebar"] div {
+  color: #12263f !important;}
+[data-testid="stSidebar"] hr {
+  border-color: #dde5ef !important;}
+
+/* hero */
 .hero {background: linear-gradient(135deg,
   #0b1f3a 0%, #14315c 55%, #7a1e1e 130%);
   color: #fff; border-radius: 14px;
@@ -23,12 +43,13 @@ p, li, span, label {color: #1e2c44;}
 .hero .badge {display: inline-block;
   background: rgba(255,255,255,.14);
   border: 1px solid rgba(255,255,255,.3);
-  color: #fff; padding: 3px 12px;
+  color: #fff !important; padding: 3px 12px;
   border-radius: 999px; font-size: .75rem;
   margin-right: 6px; margin-top: 10px;}
 .hero .autor {margin-top: 12px;
-  font-size: .82rem; color: #ffe3e3;}
+  font-size: .82rem; color: #ffe3e3 !important;}
 
+/* métricas */
 [data-testid="stMetric"] {background: #fff;
   border: 1px solid #dbe3ee;
   border-radius: 12px; padding: 14px 18px;
@@ -40,24 +61,27 @@ p, li, span, label {color: #1e2c44;}
   color: #46587a !important;
   font-weight: 600 !important;}
 
+/* lectura guiada */
 .lectura {background: #eaf1ff;
   border-left: 4px solid #2563eb;
   border-radius: 8px; padding: 12px 16px;
   margin: 8px 0; font-size: .93rem;
-  color: #17335c;}
-.lectura b {color: #0b1f3a;}
+  color: #17335c !important;}
+.lectura b {color: #0b1f3a !important;}
 
+/* chips MMI */
 .mmi-chip {border-radius: 10px;
-  padding: 10px 12px; color: #101828;
+  padding: 10px 12px; color: #101828 !important;
   height: 100%; font-size: .8rem;
   box-shadow: 0 1px 4px rgba(0,0,0,.2);}
 .mmi-chip .num {font-weight: 800;
   font-size: 1.05rem; display: block;}
 
+/* tarjetas comparativas */
 .card {border-radius: 14px;
   padding: 18px 20px; height: 100%;
   box-shadow: 0 2px 10px rgba(11,31,58,.14);
-  color: #12263f; background: #fff;}
+  color: #12263f !important; background: #fff;}
 .card h3 {margin-top: 0;}
 .card ul {padding-left: 18px; margin: 8px 0;}
 .card-col {background: linear-gradient(160deg,
@@ -69,12 +93,13 @@ p, li, span, label {color: #1e2c44;}
 .card-suelo {background: linear-gradient(160deg,
   #e9fbf3, #ffffff);
   border-top: 6px solid #059669;}
-.mini {font-size: .86rem; color: #33415c;}
+.mini {font-size: .86rem; color: #33415c !important;}
 
-.risk-banner {background: #0b1f3a; color: #fff;
-  border-radius: 12px; padding: 16px 22px;
-  text-align: center; font-size: 1.15rem;
-  font-weight: 800; letter-spacing: .3px;
-  margin: 14px 0;}
+/* banner de riesgo */
+.risk-banner {background: #0b1f3a;
+  color: #fff !important; border-radius: 12px;
+  padding: 16px 22px; text-align: center;
+  font-size: 1.15rem; font-weight: 800;
+  letter-spacing: .3px; margin: 14px 0;}
 
 hr {border-color: #dde5ef !important;}
