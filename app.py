@@ -22,12 +22,13 @@ st.set_page_config(
   page_icon='🌋', layout='wide')
 D = 'data'
 
+# ================= ESTILO =================
 if os.path.exists('style.css'):
     st.markdown('<style>' +
       open('style.css').read() + '</style>',
       unsafe_allow_html=True)
 
-# ---------- carga defensiva ----------
+# ============== CARGA DEFENSIVA ==============
 def csv_(n):
     p = f'{D}/{n}'
     if not os.path.exists(p):
@@ -53,7 +54,7 @@ def geo_(n):
         return {'type': 'FeatureCollection',
                 'features': []}
 
-# ---------- bounds + alineación USGS ----------
+# ========= BOUNDS + ALINEACIÓN USGS =========
 bp = f'{D}/bounds.json'
 if os.path.exists(bp):
     W, S, E, N = json.load(open(bp))['bounds']
@@ -79,25 +80,22 @@ def bounds_png(png, pngw):
         top = ff - e / 2
         right = left + a * w
         bottom = top + e * h
-        return [[bottom, left], [top, right]]
+        bb = [[bottom, left], [top, right]]
+        if bottom >= top or left >= right:
+            return None
+        return bb
     except Exception:
         return None
 
 BINT = bounds_png(
   f'{D}/intensity_overlay.png',
   f'{D}/intensity_overlay.pngw')
-def valida_b(b):
-    try:
-        return (b[0][0] < b[1][0]) and \
-               (b[0][1] < b[1][1])
-    except Exception:
-        return False
-
-if BINT is None or not valida_b(BINT):
+if BINT is None:
     BINT = BOUNDS
 
-EPI = [4.903, -76.189]
+EPI_COL = [4.903, -76.189]
 
+# ============== DATOS ==============
 d_exp = csv_('exposicion_deptos_MMI6.csv')
 d_mun = csv_('exposicion_municipios_MMI6.csv')
 d_con = csv_('construido_deptos_MMI6.csv')
@@ -109,14 +107,7 @@ rep = geo_('replicas.geojson')
 sint = rep.get('metadata', {}).get(
   'sintetico', False)
 
-def suma(df, col):
-    if df.empty or col not in df:
-        return 0.0
-    return float(df[col].sum())
-
-def fmt(x):
-    return f'{x:,.0f}'
-
+# ============ CONSTANTES ============
 AUTOR = ('Ensayo desarrollado por '
   '<b>Rafael Leonardo Ruiz Díaz</b> · '
   'un aporte para entender el sismo')
@@ -135,72 +126,14 @@ MMI = [
   ('IX', '#e31a1c', 'Violento',
    'Colapsos parciales y totales.')]
 
-# ---------- helpers ----------
-def mapa_base(zoom=7):
-    m = folium.Map(location=[4.9, -76.2],
-      zoom_start=zoom)
-    folium.TileLayer('cartodbpositron',
-      name='Base clara').add_to(m)
-    folium.TileLayer(
-      tiles='https://server.arcgisonline.com/'
-        'ArcGIS/rest/services/World_Imagery/'
-        'MapServer/tile/{z}/{y}/{x}',
-      attr='Esri', name='Satélite').add_to(m)
-    folium.LayerControl().add_to(m)
-    return m
+# ============= HELPERS =============
+def fmt(x):
+    return f'{x:,.0f}'
 
-def overlay(m, png, op_=0.7, bb=None):
-    p = f'{D}/{png}'
-    if bb is None:
-        bb = BOUNDS
-    if os.path.exists(p):
-        raster_layers.ImageOverlay(
-          p, bounds=bb,
-          opacity=op_).add_to(m)
-
-def epi(m):
-    folium.Marker(EPI,
-      popup='Epicentro M7.4',
-      icon=folium.Icon(
-        color='red', icon='star')).add_to(m)
-
-def mostrar_mapa(m, h=520):
-    try:
-        st_folium(m, height=h)
-    except Exception as e:
-        st.error('El mapa no se pudo renderizar: '
-          + str(e))
-
-def leyenda(m, titulo, items, nota=''):
-    h = ('<div style="position:fixed;'
-      'bottom:24px;left:12px;z-index:999;'
-      'background:rgba(255,255,255,.97);'
-      'color:#12263f;padding:12px 16px;'
-      'border-radius:12px;'
-      'box-shadow:0 4px 16px '
-      'rgba(0,0,0,.35);'
-      'font-family:Inter,Arial,sans-serif;'
-      'font-size:12px;line-height:1.9;'
-      'min-width:160px;">'
-      '<div style="font-weight:800;'
-      'font-size:13px;margin-bottom:4px;'
-      'color:#0b1f3a;">' + titulo + '</div>')
-    for c, t in items:
-        h += ('<div><i style="background:' + c +
-          ';display:inline-block;width:14px;'
-          'height:14px;margin-right:8px;'
-          'border-radius:4px;'
-          'vertical-align:-2px;'
-          'box-shadow:inset 0 0 0 1px '
-          'rgba(0,0,0,.25);"></i>'
-          '<span style="color:#12263f;">'
-          + t + '</span></div>')
-    if nota:
-        h += ('<div style="margin-top:6px;'
-          'font-size:10px;color:#46587a;">'
-          + nota + '</div>')
-    h += '</div>'
-    m.get_root().html.add_child(Element(h))
+def suma(df, col):
+    if df.empty or col not in df:
+        return 0.0
+    return float(df[col].sum())
 
 def lectura(txt):
     st.markdown('<div class="lectura">' +
@@ -213,27 +146,81 @@ def chart_cfg(fig):
                 color='#12263f'),
       margin=dict(l=20, r=20, t=50, b=20))
 
-# ---------- navegación ----------
-st.sidebar.title('🌋 Observatorio')
-st.sidebar.caption('Sismo M7.4 · Colombia')
-op = st.sidebar.radio('Secciones', [
-  '🏠 Inicio',
-  '🌍 El sismo',
-  '🆚 Colombia vs Venezuela',
-  '🎯 Intensidad (MMI)',
-  '👥 Población expuesta',
-  '🏗�?Edificaciones',
-  '⛰️ Amenazas secundarias',
-  '�?Validación',
-  '📚 Aprende',
-  '🔬 Metodología y datos'])
-st.sidebar.markdown('---')
-st.sidebar.caption(
-  'Ensayo: **Rafael Leonardo Ruiz Díaz** · '
-  'un aporte para entender el sismo')
+def mapa_base(zoom=7, loc=None):
+    loc = loc or [4.9, -76.2]
+    m = folium.Map(location=loc,
+      zoom_start=zoom,
+      tiles='cartodbpositron')
+    folium.TileLayer(
+      tiles='https://server.arcgisonline.com/'
+        'ArcGIS/rest/services/World_Imagery/'
+        'MapServer/tile/{z}/{y}/{x}',
+      attr='Esri', name='Satélite').add_to(m)
+    folium.LayerControl().add_to(m)
+    return m
 
-# ============ INICIO ============
-if op == '🏠 Inicio':
+def overlay(m, png, op_=0.75, bb=None):
+    p = f'{D}/{png}'
+    if not os.path.exists(p):
+        st.caption('⚠️ Falta el archivo: ' + png)
+        return
+    try:
+        raster_layers.ImageOverlay(
+          p, bounds=bb or BOUNDS,
+          opacity=op_,
+          interactive=False).add_to(m)
+    except Exception as e:
+        st.caption('⚠️ No se pudo cargar '
+          + png + ': ' + str(e))
+
+def epi(m):
+    folium.Marker(EPI_COL,
+      popup='Epicentro M7.4',
+      icon=folium.Icon(
+        color='red', icon='star')).add_to(m)
+
+def mostrar_mapa(m, h=520):
+    try:
+        st_folium(m, height=h)
+    except Exception as e:
+        st.error('El mapa no se pudo renderizar: '
+          + str(e))
+
+def leyenda(m, titulo, items, nota=''):
+    rows = ''
+    for c, t in items:
+        rows += ('<div style="margin:2px 0;">'
+          '<span style="display:inline-block;'
+          'width:14px;height:14px;'
+          'border-radius:4px;background:' + c +
+          ';margin-right:8px;'
+          'vertical-align:-2px;'
+          'border:1px solid rgba(0,0,0,.3);">'
+          '</span>'
+          '<span style="color:#12263f;">' + t +
+          '</span></div>')
+    html = ('<div style="position:fixed;'
+      'bottom:24px;left:12px;z-index:9999;'
+      'background:#ffffff;color:#12263f;'
+      'padding:12px 16px;border-radius:12px;'
+      'border:1px solid #cbd5e1;'
+      'box-shadow:0 4px 16px rgba(0,0,0,.35);'
+      'font-family:Inter,Arial,sans-serif;'
+      'font-size:12px;line-height:1.7;'
+      'min-width:170px;">'
+      '<div style="font-weight:800;'
+      'font-size:13px;color:#0b1f3a;'
+      'margin-bottom:6px;">' + titulo +
+      '</div>' + rows)
+    if nota:
+        html += ('<div style="margin-top:6px;'
+          'font-size:10px;color:#46587a;">' +
+          nota + '</div>')
+    html += '</div>'
+    m.get_root().html.add_child(Element(html))
+
+# ============ SECCIONES ============
+def sec_inicio():
     st.markdown('<div class="hero">'
       '<h1 style="color:#ffffff !important;">'
       'Terremoto de Colombia M7.4</h1>'
@@ -277,8 +264,7 @@ if op == '🏠 Inicio':
       'control de capas (arriba a la derecha) para '
       'alternar base clara o satélite.')
 
-# ============ EL SISMO ============
-elif op == '🌍 El sismo':
+def sec_sismo():
     st.title('🌍 El sismo en contexto')
     lectura('<b>Resumen:</b> un sismo de magnitud '
       '7.4 con hipocentro profundo (~107 km) bajo '
@@ -338,38 +324,39 @@ elif op == '🌍 El sismo':
           'Gutenberg–Richter por qué hay muchas '
           'pequeñas y pocas grandes.')
 
-# ============ COMPARATIVA ============
-elif op == '🆚 Colombia vs Venezuela':
+def sec_comparativa():
     st.title('🆚 Dos sismos, dos historias')
-    lectura('<b>Más allá de la magnitud:</b> sismos '
-      'de tamaño similar pueden generar impactos '
-      'radicalmente diferentes. La profundidad, el '
-      'suelo y lo construido deciden el desastre.')
+    lectura('<b>Más allá de la magnitud:</b> por '
+      'qué sismos de tamaño similar pueden generar '
+      'impactos radicalmente diferentes. De la roca '
+      'a la ciudad.')
     a, b = st.columns(2)
     with a:
         st.markdown('<div class="card card-col">'
-          '<h3>🇨🇴 Colombia · 10-ago-2026</h3>'
+          '<h3>🏔️ Caso Colombia · 10-ago-2026</h3>'
           '<b>Mw 7.4 · Profundidad ~107 km</b>'
           '<ul class="mini">'
-          '<li>Ruptura profunda: mayor recorrido de '
-          'las ondas hasta la superficie.</li>'
-          '<li>Mayor dispersión: las ondas se '
-          'atenúan antes de llegar.</li>'
-          '<li>Sacudida perceptible en una región '
-          'muy extensa, con menor violencia '
-          'puntual.</li></ul></div>',
-          unsafe_allow_html=True)
+          '<li><b>Ruptura profunda:</b> mayor '
+          'recorrido de las ondas hasta la '
+          'superficie.</li>'
+          '<li><b>Mayor dispersión:</b> las ondas '
+          'se atenúan significativamente antes de '
+          'llegar.</li>'
+          '<li><b>Área afectada:</b> movimiento '
+          'perceptible en una región muy extensa, '
+          'con menor violencia puntual.</li>'
+          '</ul></div>', unsafe_allow_html=True)
     with b:
         st.markdown('<div class="card card-ven">'
-          '<h3>🇻 Venezuela · 4-jun-2026</h3>'
-          '<b>Doblete Mw 7.2 + 7.5 · ~10�?0 km</b>'
+          '<h3>🏙️ Caso Venezuela · 4-jun-2026</h3>'
+          '<b>Doblete Mw 7.2 + 7.5 · ~10–20 km</b>'
           '<ul class="mini">'
-          '<li>Ruptura somera, muy próxima a zonas '
-          'urbanas.</li>'
-          '<li>Menor atenuación: las ondas golpean '
-          'con mayor energía.</li>'
-          '<li>Doblete sísmico: dos demandas '
-          'sucesivas sobre estructuras ya '
+          '<li><b>Ruptura somera:</b> muy próxima a '
+          'zonas urbanas.</li>'
+          '<li><b>Menor atenuación:</b> las ondas '
+          'golpean con mayor energía.</li>'
+          '<li><b>Doblete sísmico:</b> dos demandas '
+          'sucesivas sobre estructuras posiblemente '
           'degradadas por el primer evento.</li>'
           '</ul></div>', unsafe_allow_html=True)
     st.markdown('---')
@@ -395,12 +382,10 @@ elif op == '🆚 Colombia vs Venezuela':
                 for d in ds]
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=ds, y=som,
-          mode='lines',
-          name='Somero (VEN)',
+          mode='lines', name='Somero (VEN)',
           line={'color': '#ea580c', 'width': 3}))
         fig.add_trace(go.Scatter(x=ds, y=prof,
-          mode='lines',
-          name='Profundo (COL)',
+          mode='lines', name='Profundo (COL)',
           line={'color': '#2563eb', 'width': 3}))
         fig.update_layout(
           title='Atenuación con la distancia '
@@ -413,76 +398,95 @@ elif op == '🆚 Colombia vs Venezuela':
       'sismo somero concentra daño extremo cerca de '
       'la falla; uno profundo reparte sacudida '
       'moderada en un área amplia.')
-    st.markdown('---')
     st.subheader('El suelo transforma la sacudida')
     a, b = st.columns(2)
     with a:
         st.markdown('<div class="card card-suelo">'
-          '<h3>🏜�?Amplificación (cuencas)</h3>'
+          '<h3>🏜️ Cuenca y topografía</h3>'
           '<ul class="mini">'
-          '<li>Depósitos blandos: mayor amplitud y '
-          'duración del movimiento.</li>'
-          '<li>Cuencas: reflejo y atrapamiento de '
+          '<li>El contraste de rigidez de los '
+          'estratos refleja, refracta y filtra las '
           'ondas.</li>'
-          '<li>Relieves: concentran o dispersan '
-          'según su geometría.</li></ul></div>',
-          unsafe_allow_html=True)
+          '<li><b>Depósitos blandos:</b> posible '
+          'amplificación y mayor duración.</li>'
+          '<li><b>Cuencas:</b> reflejo y atrapamiento '
+          'de ondas.</li>'
+          '<li><b>Relieves:</b> concentración o '
+          'dispersión según su geometría.</li>'
+          '</ul></div>', unsafe_allow_html=True)
     with b:
         st.markdown('<div class="card card-suelo">'
-          '<h3>💦 Licuefacción de suelos</h3>'
+          '<h3>💦 Licuación de suelos</h3>'
           '<ul class="mini">'
           '<li>Pérdida súbita de resistencia del '
           'terreno.</li>'
           '<li>Requiere: suelo granular suelto + '
           'saturación de agua + demanda cíclica '
           'fuerte.</li>'
-          '<li>Las estructuras pueden hundirse o '
+          '<li>Fenómeno distinto a la amplificación: '
+          'las estructuras pueden hundirse o '
           'inclinarse por pérdida de soporte.</li>'
           '</ul></div>', unsafe_allow_html=True)
-    st.subheader('Cada estructura escucha un sismo '
-      'diferente')
+    st.subheader('Cada estructura "escucha" un '
+      'sismo diferente')
     a, b, c = st.columns(3)
     with a:
         st.markdown('<div class="card card-col">'
-          '<h3>🏠 Bajas (1�? pisos)</h3>'
-          '<p class="mini">Resuenan con periodos '
-          'cortos (~0.3 s): alta frecuencia.</p>'
-          '</div>', unsafe_allow_html=True)
+          '<h3>🏠 Bajas (1–3 pisos)</h3>'
+          '<p class="mini">Responden con mayor '
+          'fuerza a ondas de periodo corto (alta '
+          'frecuencia, ~0.3 s).</p></div>',
+          unsafe_allow_html=True)
     with b:
         st.markdown('<div class="card card-col">'
           '<h3>🏢 Medianas</h3>'
-          '<p class="mini">Sensibles a periodos '
-          'intermedios (~1.0 s).</p></div>',
+          '<p class="mini">Más sensibles a ondas de '
+          'periodo intermedio (~1.0 s).</p></div>',
           unsafe_allow_html=True)
     with c:
         st.markdown('<div class="card card-col">'
-          '<h3>🏙�?Altas</h3>'
-          '<p class="mini">Resuenan con periodos '
-          'largos (~3.0 s): baja frecuencia.</p>'
-          '</div>', unsafe_allow_html=True)
+          '<h3>🏙️ Altas</h3>'
+          '<p class="mini">Entran en resonancia con '
+          'ondas de periodo largo (baja frecuencia, '
+          '~3.0 s).</p></div>',
+          unsafe_allow_html=True)
     lectura('<b>Compatibilidad espectral:</b> si el '
       'suelo amplifica periodos cercanos al periodo '
       'natural de una estructura, su respuesta y el '
-      'daño pueden aumentar dramáticamente. Misma '
-      'magnitud �?misma demanda para todos los '
-      'edificios.')
+      'daño pueden aumentar dramáticamente. '
+      '<b>Misma magnitud ≠ misma demanda</b> para '
+      'todos los edificios.')
     st.markdown('<div class="risk-banner">Riesgo '
       'Sísmico = Amenaza × Exposición × '
       'Vulnerabilidad</div>',
       unsafe_allow_html=True)
-    with st.expander('Factores de vulnerabilidad y '
-      'normas'):
-        st.write('�?Norma moderna �?desempeño: tener '
-          'un código avanzado (NSR-10, COVENIN) es '
-          'solo el primer paso; importa su '
-          'aplicación real.\n'
-          '�?Edad y sistema estructural.\n'
-          '�?Calidad de materiales y construcción.\n'
-          '�?Detallado dúctil e irregularidades.\n'
-          '�?Supervisión de obra y mantenimiento.')
+    st.subheader('El desastre depende de lo '
+      'construido')
+    a, b = st.columns(2)
+    with a:
+        st.markdown('<div class="card card-ven">'
+          '<h3>🏗️ Norma moderna ≠ desempeño</h3>'
+          '<p class="mini">Tener un código sísmico '
+          'avanzado (NSR-10, COVENIN) es solo el '
+          'primer paso: su efecto real depende de la '
+          'correcta aplicación.</p></div>',
+          unsafe_allow_html=True)
+    with b:
+        st.markdown('<div class="card card-ven">'
+          '<h3>⚠️ Factores de vulnerabilidad</h3>'
+          '<ul class="mini">'
+          '<li>Edad y sistema estructural.</li>'
+          '<li>Calidad de materiales y '
+          'construcción.</li>'
+          '<li>Detallado dúctil e irregularidades.'
+          '</li>'
+          '<li>Supervisión de obra y mantenimiento.'
+          '</li></ul></div>',
+          unsafe_allow_html=True)
+    st.caption('Diseño e investigación original: '
+      'Rafael Leonardo Ruiz Díaz.')
 
-# ============ INTENSIDAD ============
-elif op == '🎯 Intensidad (MMI)':
+def sec_intensidad():
     st.title('🎯 ¿Con qué fuerza se sintió?')
     lectura('<b>Idea clave:</b> la <b>magnitud</b> '
       'es la energía liberada (una sola cifra); la '
@@ -502,7 +506,7 @@ elif op == '🎯 Intensidad (MMI)':
     overlay(m, 'intensity_overlay.png', 0.85,
             BINT)
     epi(m)
-    leyenda(m, 'MMI',
+    leyenda(m, 'Intensidad (MMI)',
       [(x[1], x[0]) for x in MMI],
       nota='Render oficial USGS ShakeMap')
     mostrar_mapa(m, 520)
@@ -510,10 +514,10 @@ elif op == '🎯 Intensidad (MMI)':
         st.write('El USGS combina registros de '
           'acelerógrafos, reportes ciudadanos y '
           'modelos de atenuación. Mostramos el '
-          'render oficial del ShakeMap.')
+          'render oficial del ShakeMap, alineado con '
+          'su world file (.pngw).')
 
-# ============ POBLACIÓN ============
-elif op == '👥 Población expuesta':
+def sec_poblacion():
     st.title('👥 ¿Cuántas personas fueron '
       'expuestas?')
     lectura('<b>Idea clave:</b> cruzamos el mapa de '
@@ -522,7 +526,7 @@ elif op == '👥 Población expuesta':
       'personas viven en zonas con cada nivel de '
       'sacudida.')
     tot = suma(d_exp, 'pob_MMI6plus')
-    st.metric('Población con MMI �?6', fmt(tot))
+    st.metric('Población con MMI ≥ 6', fmt(tot))
     m = mapa_base()
     if not d_exp.empty:
         nrm = Normalize(0,
@@ -540,6 +544,9 @@ elif op == '👥 Población expuesta':
           tooltip=folium.GeoJsonTooltip(
             ['ADM1_NAME'])).add_to(m)
     epi(m)
+    leyenda(m, 'Población expuesta',
+      ['#fff5f0', '#fb6a4a', '#a10f2b'],
+      nota='Baja → alta (coropleta)')
     mostrar_mapa(m, 520)
     a, b = st.columns(2)
     with a:
@@ -569,16 +576,15 @@ elif op == '👥 Población expuesta':
           'deben considerarse en revisiones y '
           'prevención.')
 
-# ============ EDIFICACIONES ============
-elif op == '🏗�?Edificaciones':
-    st.title('🏗�?Edificaciones e ingeniería')
+def sec_edificaciones():
+    st.title('🏗️ Edificaciones e ingeniería')
     lectura('<b>Idea clave:</b> distintas '
       'estructuras resuenan con distintos períodos. '
       'Las <b>PSA</b> miden la sacudida en cada '
       'período: 0.3 s casas bajas, 1.0 s edificios '
       'medios, 3.0 s puentes y torres.')
     km2 = suma(d_con, 'km2_const_MMI6')
-    st.metric('km² urbanos en MMI �?6', fmt(km2))
+    st.metric('km² urbanos en MMI ≥ 6', fmt(km2))
     if not d_con.empty:
         fig = px.bar(d_con.sort_values(
           'km2_const_MMI6').tail(10),
@@ -622,13 +628,12 @@ elif op == '🏗�?Edificaciones':
           width='stretch')
     with st.expander('¿Cómo leer un espectro?'):
         st.write('Cada línea es una ciudad. Curva '
-          'alta en 0.3 s �?sufren más las casas de '
-          '1�? pisos; alta en 1.0 s �?edificios '
+          'alta en 0.3 s → sufren más las casas de '
+          '1–3 pisos; alta en 1.0 s → edificios '
           'medios. Compara ciudades para priorizar '
           'el tipo de revisión estructural.')
 
-# ============ SECUNDARIAS ============
-elif op == '⛰️ Amenazas secundarias':
+def sec_secundarias():
     st.title('⛰️ Deslizamientos y licuefacción')
     lectura('<b>Idea clave:</b> el sismo puede '
       'desencadenar otros peligros: '
@@ -642,10 +647,22 @@ elif op == '⛰️ Amenazas secundarias':
       format_func=lambda x: {
         'desliz.png': '🟠 Deslizamientos',
         'liq.png': '🔵 Licuefacción',
-        'sar.png': '🛰�?Cambio SAR'}[x])
+        'sar.png': '🛰️ Cambio SAR'}[x])
     m = mapa_base()
     overlay(m, capa, 0.75)
     epi(m)
+    if capa == 'desliz.png':
+        leyenda(m, 'Susceptibilidad',
+          ['#ffffb2', '#fd8d3c', '#bd0026'],
+          nota='Baja → alta (PGA × pendiente)')
+    elif capa == 'liq.png':
+        leyenda(m, 'Licuefacción',
+          ['#deebf7', '#6baed6', '#08519c'],
+          nota='Baja → alta (valles húmedos)')
+    else:
+        leyenda(m, 'Cambio SAR',
+          ['#000000', '#ff4500'],
+          nota='|log-ratio VH| pre/post')
     mostrar_mapa(m, 500)
     if not d_sec.empty:
         a, b = st.columns(2)
@@ -674,9 +691,8 @@ elif op == '⛰️ Amenazas secundarias':
           'inclinando estructuras. Es típica de '
           'valles aluviales.')
 
-# ============ VALIDACIÓN ============
-elif op == '�?Validación':
-    st.title('�?Validación del modelo')
+def sec_validacion():
+    st.title('✅ Validación del modelo')
     lectura('<b>Idea clave:</b> comparamos el PGA '
       'modelado por el USGS con el PGA registrado '
       'por estaciones reales. Si los puntos se '
@@ -726,8 +742,7 @@ elif op == '�?Validación':
             chart_cfg(fig)
             st.plotly_chart(fig, width='stretch')
 
-# ============ APRENDE ============
-elif op == '📚 Aprende':
+def sec_aprende():
     st.title('📚 Glosario y conceptos')
     lectura('Esta sección explica, sin tecnicismos, '
       'cada término usado en el observatorio.')
@@ -751,13 +766,16 @@ elif op == '📚 Aprende':
         'suelo saturado por la sacudida.'),
       ('Doblete sísmico', 'Dos sismos grandes '
         'sucesivos: el segundo golpea estructuras '
-        'ya degradadas por el primero.')]
+        'ya degradadas por el primero.'),
+      ('Compatibilidad espectral', 'Cuando el suelo '
+        'amplifica periodos cercanos al periodo '
+        'natural de una estructura, el daño '
+        'aumenta.')]
     for t, d in terms:
         with st.expander(t):
             st.write(d)
 
-# ============ METODOLOGÍA ============
-elif op == '🔬 Metodología y datos':
+def sec_metodologia():
     st.title('🔬 Metodología, fuentes y límites')
     texto = (
         "**Autor:** Rafael Leonardo Ruiz Díaz. "
@@ -771,11 +789,10 @@ elif op == '🔬 Metodología y datos':
         "deslizamientos = PGA × pendiente; "
         "licuefacción = PGA × (1−pendiente) × "
         "humedad; calibrado dentro de la zona "
-        "sacudida (MMI �?5).\n\n"
+        "sacudida (MMI ≥ 5).\n\n"
         "**Comparativa regional:** el análisis "
         "Colombia–Venezuela sigue el marco "
-        "conceptual Amenaza × Exposición × "
-        "Vulnerabilidad.\n\n"
+        "Amenaza × Exposición × Vulnerabilidad.\n\n"
         "**Limitaciones:** productos modelados; el "
         "raster MMI cubre el núcleo de sacudida; "
         "réplicas simuladas si la API no publica.")
@@ -804,3 +821,36 @@ elif op == '🔬 Metodología y datos':
                       file_name=f, key=f)
                 except Exception:
                     pass
+
+# ============ NAVEGACIÓN ============
+st.sidebar.title('🌋 Observatorio')
+st.sidebar.caption('Sismo M7.4 · Colombia')
+SECCIONES = [
+  '🏠 Inicio',
+  '🌍 El sismo',
+  '🆚 Colombia vs Venezuela',
+  '🎯 Intensidad (MMI)',
+  '👥 Población expuesta',
+  '🏗️ Edificaciones',
+  '⛰️ Amenazas secundarias',
+  '✅ Validación',
+  '📚 Aprende',
+  '🔬 Metodología y datos']
+op = st.sidebar.radio('Secciones', SECCIONES)
+st.sidebar.markdown('---')
+st.sidebar.caption(
+  'Ensayo: **Rafael Leonardo Ruiz Díaz** · '
+  'un aporte para entender el sismo')
+
+RUTAS = {
+  '🏠 Inicio': sec_inicio,
+  '🌍 El sismo': sec_sismo,
+  '🆚 Colombia vs Venezuela': sec_comparativa,
+  '🎯 Intensidad (MMI)': sec_intensidad,
+  '👥 Población expuesta': sec_poblacion,
+  '🏗️ Edificaciones': sec_edificaciones,
+  '⛰️ Amenazas secundarias': sec_secundarias,
+  '✅ Validación': sec_validacion,
+  '📚 Aprende': sec_aprende,
+  '🔬 Metodología y datos': sec_metodologia}
+RUTAS[op]()
