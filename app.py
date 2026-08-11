@@ -21,16 +21,12 @@ st.set_page_config(
   layout='wide')
 D = 'data'
 
-# ---------- carga defensiva ----------
 def csv_(n):
     p = f'{D}/{n}'
     if not os.path.exists(p):
         return pd.DataFrame()
     try:
-        df = pd.read_csv(p)
-        if df.empty:
-            return pd.DataFrame()
-        return df
+        return pd.read_csv(p)
     except Exception:
         return pd.DataFrame()
 
@@ -41,15 +37,11 @@ def geo_(n):
                 'features': []}
     try:
         g = json.load(open(p))
-        # filtrar features sin coordinates
         feats = []
         for f in g.get('features', []):
-            try:
-                ge = f.get('geometry', {})
-                if 'coordinates' in ge:
-                    feats.append(f)
-            except Exception:
-                pass
+            ge = f.get('geometry', {})
+            if 'coordinates' in ge:
+                feats.append(f)
         g['features'] = feats
         return g
     except Exception:
@@ -112,7 +104,6 @@ def epi(m):
       icon=folium.Icon(
         color='red', icon='star')).add_to(m)
 
-# ============ 1. RESUMEN ============
 if op == 'Resumen ejecutivo':
     st.title('Resumen ejecutivo')
     st.caption('Terremoto M7.4 · 10-ago-2026 '
@@ -151,7 +142,6 @@ if op == 'Resumen ejecutivo':
         st.plotly_chart(fig,
           width='stretch')
 
-# ============ 2. SISMOLOGÍA ============
 elif op == 'Sismología':
     st.title('Sismología y réplicas')
     if sint:
@@ -195,7 +185,6 @@ elif op == 'Sismología':
             st.plotly_chart(fig,
               width='stretch')
 
-# ============ 3. POBLACIÓN ============
 elif op == 'Población':
     st.title('Exposición poblacional')
     m = mapa_base()
@@ -240,7 +229,6 @@ elif op == 'Población':
             st.plotly_chart(fig,
               width='stretch')
 
-# ============ 4. INGENIERÍA ============
 elif op == 'Ingeniería':
     st.title('Ingeniería sísmica')
     st.caption('PSA 0.3s: casas 1–3 pisos · '
@@ -279,7 +267,6 @@ elif op == 'Ingeniería':
             'psa03', ascending=False),
           width='stretch')
 
-# ============ 5. SECUNDARIAS ============
 elif op == 'Amenazas secundarias':
     st.title('Deslizamientos, licuefacción '
       'y cambio SAR')
@@ -315,7 +302,6 @@ elif op == 'Amenazas secundarias':
             st.plotly_chart(fig,
               width='stretch')
 
-# ============ 6. VALIDACIÓN ============
 elif op == 'Validación':
     st.title('Estaciones: observado vs '
       'modelado')
@@ -369,7 +355,6 @@ elif op == 'Validación':
             st.plotly_chart(fig,
               width='stretch')
 
-# ============ 7. METODOLOGÍA ============
 elif op == 'Metodología':
     st.title('Metodología y datos')
     texto = (
@@ -400,7 +385,8 @@ elif op == 'Metodología':
                 try:
                     st.download_button(
                         f,
-                        open(f'{D}/{f}', 'rb').read(),
+                        open(f'{D}/{f}',
+                             'rb').read(),
                         file_name=f, key=f)
                 except Exception:
                     pass
