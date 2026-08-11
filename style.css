@@ -1,105 +1,170 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+/* style.css */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
 
-#MainMenu, footer, header {visibility: hidden;}
+html, body, [class*="css"] {
+    font-family: 'Inter', sans-serif;
+}
 
-/* fondo claro SIN importar el tema */
-html, body, .stApp,
-[data-testid="stAppViewContainer"],
-section.main {
-  background: #f6f8fb !important;}
+/* Contenedor principal: limita el ancho en pantallas gigantes para que no se vea desfasado */
+.main .block-container {
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+    max-width: 1400px; 
+}
 
-/* texto general legible */
-.stApp p, .stApp li, .stApp label {
-  color: #1e2c44 !important;}
-.stApp h1 {font-weight: 800 !important;
-  color: #0b1f3a !important;}
-.stApp h2, .stApp h3 {
-  font-weight: 600 !important;
-  color: #14315c !important;}
+/* Hero Section */
+.hero {
+    background: linear-gradient(135deg, #0b1f3a 0%, #14315c 55%, #7a1e1e 130%);
+    padding: 3rem 2rem;
+    border-radius: 15px;
+    color: white;
+    margin-bottom: 2rem;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+.hero h1 {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+    font-weight: 800;
+    line-height: 1.2;
+}
+.hero p {
+    font-size: 1.2rem;
+    opacity: 0.9;
+    margin-bottom: 1.5rem;
+}
+.hero .autor {
+    margin-top: 1.5rem;
+    font-size: 0.9rem;
+    opacity: 0.8;
+}
+.badge {
+    background: rgba(255,255,255,0.15);
+    padding: 0.4rem 0.8rem;
+    border-radius: 20px;
+    margin-right: 0.5rem;
+    font-size: 0.85rem;
+    display: inline-block;
+    margin-bottom: 0.5rem;
+}
 
-/* sidebar blanco y legible */
-section[data-testid="stSidebar"],
-[data-testid="stSidebar"] > div {
-  background: #ffffff !important;}
-[data-testid="stSidebar"] h1,
-[data-testid="stSidebar"] p,
-[data-testid="stSidebar"] span,
-[data-testid="stSidebar"] label,
-[data-testid="stSidebar"] caption,
-[data-testid="stSidebar"] div {
-  color: #12263f !important;}
-[data-testid="stSidebar"] hr {
-  border-color: #dde5ef !important;}
+/* Bloques de Lectura */
+.lectura {
+    background: #f8f9fa;
+    border-left: 5px solid #14315c;
+    padding: 1.5rem;
+    border-radius: 0 8px 8px 0;
+    margin: 1.5rem 0;
+    font-size: 1.1rem;
+    line-height: 1.6;
+    color: #333;
+}
 
-/* hero */
-.hero {background: linear-gradient(135deg,
-  #0b1f3a 0%, #14315c 55%, #7a1e1e 130%);
-  color: #fff; border-radius: 14px;
-  padding: 28px 32px; margin-bottom: 8px;}
-.hero h1 {color: #fff !important;
-  margin: 0 0 6px 0; font-size: 2rem;}
-.hero p {color: #d7e0f0 !important; margin: 0;
-  font-size: .95rem;}
-.hero .badge {display: inline-block;
-  background: rgba(255,255,255,.14);
-  border: 1px solid rgba(255,255,255,.3);
-  color: #fff !important; padding: 3px 12px;
-  border-radius: 999px; font-size: .75rem;
-  margin-right: 6px; margin-top: 10px;}
-.hero .autor {margin-top: 12px;
-  font-size: .82rem; color: #ffe3e3 !important;}
+/* Tarjetas (Cards) */
+.card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    height: 100%;
+    border-top: 5px solid transparent;
+}
+.card-col { border-top-color: #2563eb; }
+.card-ven { border-top-color: #ea580c; }
+.card-suelo { border-top-color: #059669; }
 
-/* métricas */
-[data-testid="stMetric"] {background: #fff;
-  border: 1px solid #dbe3ee;
-  border-radius: 12px; padding: 14px 18px;
-  box-shadow: 0 1px 3px rgba(16,42,67,.1);}
-[data-testid="stMetricValue"] {
-  color: #0b1f3a !important;
-  font-weight: 800 !important;}
-[data-testid="stMetricLabel"] {
-  color: #46587a !important;
-  font-weight: 600 !important;}
+.card h3 {
+    margin-top: 0;
+    font-size: 1.3rem;
+    color: #12263f;
+}
+.mini { font-size: 0.9rem; color: #46587a; line-height: 1.5; }
+.mini li { margin-bottom: 0.5rem; }
 
-/* lectura guiada */
-.lectura {background: #eaf1ff;
-  border-left: 4px solid #2563eb;
-  border-radius: 8px; padding: 12px 16px;
-  margin: 8px 0; font-size: .93rem;
-  color: #17335c !important;}
-.lectura b {color: #0b1f3a !important;}
+/* Escala MMI */
+.mmi-chip {
+    padding: 1rem;
+    border-radius: 8px;
+    color: #12263f;
+    text-align: center;
+    margin-bottom: 1rem;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    height: 100%;
+}
+.mmi-chip .num {
+    display: block;
+    font-size: 1.5rem;
+    font-weight: 800;
+    margin-bottom: 0.5rem;
+}
 
-/* chips MMI */
-.mmi-chip {border-radius: 10px;
-  padding: 10px 12px; color: #101828 !important;
-  height: 100%; font-size: .8rem;
-  box-shadow: 0 1px 4px rgba(0,0,0,.2);}
-.mmi-chip .num {font-weight: 800;
-  font-size: 1.05rem; display: block;}
+/* Banner de Riesgo */
+.risk-banner {
+    background: linear-gradient(90deg, #7a1e1e, #ea580c);
+    color: white;
+    padding: 1rem;
+    text-align: center;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 1.2rem;
+    margin: 2rem 0;
+    letter-spacing: 0.5px;
+}
 
-/* tarjetas comparativas */
-.card {border-radius: 14px;
-  padding: 18px 20px; height: 100%;
-  box-shadow: 0 2px 10px rgba(11,31,58,.14);
-  color: #12263f !important; background: #fff;}
-.card h3 {margin-top: 0;}
-.card ul {padding-left: 18px; margin: 8px 0;}
-.card-col {background: linear-gradient(160deg,
-  #e8f0ff, #ffffff);
-  border-top: 6px solid #2563eb;}
-.card-ven {background: linear-gradient(160deg,
-  #ffefe2, #ffffff);
-  border-top: 6px solid #ea580c;}
-.card-suelo {background: linear-gradient(160deg,
-  #e9fbf3, #ffffff);
-  border-top: 6px solid #059669;}
-.mini {font-size: .86rem; color: #33415c !important;}
+/* =========================================
+   RESPONSIVE DESIGN (CELULARES Y TABLETS)
+========================================= */
+@media (max-width: 768px) {
+    .main .block-container {
+        padding: 1rem;
+    }
+    .hero {
+        padding: 2rem 1rem;
+        border-radius: 10px;
+    }
+    .hero h1 {
+        font-size: 1.8rem;
+    }
+    .hero p {
+        font-size: 1rem;
+    }
+    .lectura {
+        font-size: 1rem;
+        padding: 1rem;
+    }
+    .card {
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+    .risk-banner {
+        font-size: 1rem;
+        padding: 0.8rem;
+    }
+    .mmi-chip {
+        padding: 0.8rem;
+    }
+    .mmi-chip .num {
+        font-size: 1.2rem;
+    }
+    /* Ajustar iframes y mapas en móvil para evitar scroll horizontal */
+    iframe {
+        width: 100% !important;
+        max-height: 450px !important;
+    }
+    .folium-map {
+        width: 100% !important;
+        height: 450px !important;
+    }
+}
 
-/* banner de riesgo */
-.risk-banner {background: #0b1f3a;
-  color: #fff !important; border-radius: 12px;
-  padding: 16px 22px; text-align: center;
-  font-size: 1.15rem; font-weight: 800;
-  letter-spacing: .3px; margin: 14px 0;}
-
-hr {border-color: #dde5ef !important;}
+/* =========================================
+   PANTALLAS GIGANTES (4K / Monitores UXGA)
+========================================= */
+@media (min-width: 1600px) {
+    .main .block-container {
+        max-width: 1600px;
+        font-size: 1.1rem;
+    }
+    .hero h1 {
+        font-size: 3rem;
+    }
+}
