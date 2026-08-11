@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -11,6 +10,11 @@ import plotly.express as px
 import plotly.graph_objects as go
 from matplotlib import cm
 from matplotlib.colors import Normalize, to_hex
+
+# IMPORTACIONES PARA LEAFLET
+import folium
+from streamlit_folium import st_folium
+import branca.colormap as bcm
 
 try:
     from matplotlib import colormaps as _m
@@ -153,65 +157,105 @@ def chart_cfg(fig):
                 color='#12263f'),
       margin=dict(l=20, r=20, t=50, b=20))
 
-def mapa_estatico(titulo, capa=None, bb=None,
+# ---------- NUEVO MAPA LEAFLET ----------
+def mapa_interactivo(titulo, capa=None, bb=None,
   coro=None, items=None, nota=None,
   puntos=None):
-    fig, ax = plt.subplots(
-      figsize=(9.5, 9.5), dpi=150)
-    ax.set_facecolor('#eef2f7')
+    
+    m = folium.Map(location=[EPI[0], EPI[1]], zoom_start=6, tiles='CartoDB positron', control_scale=True)
+
+    # 1. Capa GeoJSON (Límites o Coropleta)
     if g_dep is not None:
         if coro is None:
-            g_dep.boundary.plot(ax=ax,
-              color='#93a1b5', linewidth=0.7)
+            folium.GeoJson(
+                json.loads(g_dep.to_json()),
+                name='Departamentos',
+                style_function=lambda x: {'fillColor': 'transparent', 'color': '#93a1b5', 'weight': 0.7, 'fillOpacity': 0.1}
+            ).add_to(m)
         else:
-            g_dep.plot(column=coro, cmap='Reds',
-              ax=ax, edgecolor='#8895a8',
-              linewidth=0.7)
+            g_dep_temp = g_dep.copy()
+            g_dep_temp['val'] = coro
+            max_v = max(coro) if max(coro) > 0 else 1
+            colormap = bcm.linear.Reds_09.scale(0, max_v)
+            
+            folium.GeoJson(
+                json.loads(g_dep_temp.to_json()),
+                name='Población expuesta',
+                style_function=lambda feature: {
+                    'fillColor': colormap(feature['properties']['val']),
+                    'color': '#8895a8', 'weight': 0.7, 'fillOpacity': 0.7
+                }
+            ).add_to(m)
+
+    # 2. Capa de Imagen (Overlay PNG)
     if capa:
         p = f'{D}/{capa}'
         if os.path.exists(p):
             img = plt.imread(p)
             b = bb or BFLAT
-            ax.imshow(img,
-              extent=(b[0], b[2], b[1], b[3]),
-              alpha=0.9, zorder=3)
+            # Folium requiere formato [[lat_min, lon_min], [lat_max, lon_max]]
+            bounds = [[b[1], b[0]], [b[3], b[2]]]
+            folium.raster_layers.ImageOverlay(
+                image=img,
+                bounds=bounds,
+                opacity=0.85,
+                name=capa,
+                interactive=False,
+                cross_origin=False,
+                zindex=1,
+            ).add_to(m)
+            m.fit_bounds(bounds)
         else:
             st.caption('⚠️ Falta: ' + capa)
+
+    # 3. Marcadores de Réplicas
     if puntos:
         for lon, lat, r in puntos:
-            ax.plot(lon, lat, 'o',
-              color='#d10000', markersize=r,
-              markeredgecolor='white',
-              markeredgewidth=0.6,
-              alpha=0.7, zorder=4)
-    ax.plot(EPI[1], EPI[0], '*',
-      color='#d10000', markersize=16,
-      markeredgecolor='white',
-      markeredgewidth=1.2, zorder=6)
+            folium.CircleMarker(
+                location=[lat, lon],
+                radius=r,
+                color='white',
+                weight=0.6,
+                fill=True,
+                fill_color='#d10000',
+                fill_opacity=0.7
+            ).add_to(m)
+
+    # 4. Marcador del Epicentro
+    folium.Marker(
+        location=[EPI[0], EPI[1]],
+        tooltip='Epicentro (M7.4)',
+        icon=folium.Icon(color='red', icon='star', prefix='fa')
+    ).add_to(m)
+
+    # 5. Leyenda HTML personalizada sobre el mapa
     if items:
-        hs = [Patch(facecolor=c,
-          edgecolor='#444', label=t)
-          for c, t in items]
-        # FIX: matplotlib moderno requiere 'handles='
-        lg = ax.legend(handles=hs, loc='lower left',
-          fontsize=9, title=titulo,
-          framealpha=0.97)
-        lg.get_frame().set_facecolor('white')
-        lg.get_frame().set_edgecolor('#8895a8')
-        lg.get_title().set_color('#0b1f3a')
-        for tx in lg.get_texts():
-            tx.set_color('#12263f')
-    if nota:
-        ax.text(0.0, -0.015, nota,
-          transform=ax.transAxes, fontsize=8,
-          color='#46587a')
-    ax.set_xlim(W - 0.4, E + 0.4)
-    ax.set_ylim(S - 0.4, N + 0.4)
-    ax.set_aspect(1.0)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    st.pyplot(fig)
-    plt.close(fig)
+        legend_html = """
+        <div style="position: fixed; bottom: 40px; left: 40px; z-index: 9999;
+                    background-color: white; padding: 10px; border-radius: 5px;
+                    border: 1px solid #8895a8; box-shadow: 2px 2px 5px rgba(0,0,0,0.2);">
+            <h6 style="margin:0 0 5px 0; color:#0b1f3a; font-weight:bold;">""" + titulo + """</h6>
+        """
+        for c, t in items:
+            legend_html += f"""
+                <div style="margin: 2px 0; color: #12263f; font-size: 12px;">
+                    <span style="display:inline-block; width:14px; height:14px;
+                                 background:{c}; border:1px solid #444; margin-right:5px;
+                                 vertical-align:middle;"></span>
+                    {t}
+                </div>
+            """
+        if nota:
+            legend_html += f"<hr style='margin:5px 0;'><i style='font-size:10px;color:#46587a;'>{nota}</i>"
+        legend_html += "</div>"
+        
+        m.get_root().html.add_child(folium.Element(legend_html))
+
+    # 6. Control de capas (permite activar/desactivar overlays)
+    folium.LayerControl(collapsed=False).add_to(m)
+
+    # Renderizar en Streamlit
+    st_folium(m, width=None, returned_objects=[])
 
 # ---------- secciones ----------
 def sec_inicio():
@@ -238,13 +282,12 @@ def sec_inicio():
     n_mun = int((d_mun.pob_MMI6plus > 0).sum()) \
       if not d_mun.empty else 0
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric('Personas con sacudida fuerte',
-              fmt(tot))
+    c1.metric('Personas con sacudida fuerte', fmt(tot))
     c2.metric('Departamentos afectados', n_dep)
     c3.metric('Municipios afectados', n_mun)
     c4.metric('km² urbanos expuestos', fmt(km2))
     st.markdown('---')
-    mapa_estatico('Intensidad (MMI)',
+    mapa_interactivo('Intensidad (MMI)',
       capa='intensity_overlay.png', bb=BINT,
       items=[(x[1], x[0] + ' ' + x[2])
              for x in MMI],
@@ -287,7 +330,7 @@ def sec_sismo():
             mg = f['properties']['mag']
             pts.append((co[0], co[1],
                         1.5 + mg * 1.2))
-        mapa_estatico('Réplicas', puntos=pts,
+        mapa_interactivo('Réplicas', puntos=pts,
           items=[('#d10000', 'Réplicas '
             '(tamaño = magnitud)')],
           nota='Catálogo Omori–GR')
@@ -491,7 +534,7 @@ def sec_intensidad():
               '<b>' + nom + '</b><br>' + desc +
               '</div>', unsafe_allow_html=True)
     st.markdown('---')
-    mapa_estatico('Intensidad (MMI)',
+    mapa_interactivo('Intensidad (MMI)',
       capa='intensity_overlay.png', bb=BINT,
       items=[(x[1], x[0] + ' ' + x[2])
              for x in MMI],
@@ -519,7 +562,7 @@ def sec_poblacion():
           d_exp.pob_MMI6plus))
         coro = [vals.get(n, 0)
                 for n in g_dep.ADM1_NAME]
-    mapa_estatico('Población expuesta', coro=coro,
+    mapa_interactivo('Población expuesta', coro=coro,
       items=[(to_hex(CMAP(0.15)), 'Baja'),
              (to_hex(CMAP(0.5)), 'Media'),
              (to_hex(CMAP(0.9)), 'Alta')],
@@ -641,7 +684,7 @@ def sec_secundarias():
         items = [('#000000', 'Sin cambio'),
           ('#ff4500', 'Cambio ≥ 2.5 dB')]
         nota = 'Sentinel-1: |log-ratio VH| pre/post'
-    mapa_estatico('Amenaza secundaria',
+    mapa_interactivo('Amenaza secundaria',
       capa=capa, items=items, nota=nota)
     if not d_sec.empty:
         a, b = st.columns(2)
@@ -680,7 +723,7 @@ def sec_validacion():
     if d_est.empty:
         st.info('El catálogo USGS no publica PGA '
           'por estación para este evento aún.')
-        mapa_estatico('Intensidad (MMI)',
+        mapa_interactivo('Intensidad (MMI)',
           capa='intensity_overlay.png', bb=BINT,
           items=[(x[1], x[0]) for x in MMI])
     else:
