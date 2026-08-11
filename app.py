@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import json, os, struct
+import json, os, struct, math
 import folium
 from folium import raster_layers
 from folium import Element
@@ -131,7 +131,7 @@ MMI = [
 # ---------- helpers ----------
 def mapa_base(zoom=7):
     m = folium.Map(location=[4.9, -76.2],
-      zoom_start=zoom, tiles=None)
+      zoom_start=zoom)
     folium.TileLayer('cartodbpositron',
       name='Base clara').add_to(m)
     folium.TileLayer(
@@ -157,6 +157,13 @@ def epi(m):
       icon=folium.Icon(
         color='red', icon='star')).add_to(m)
 
+def mostrar_mapa(m, h=520):
+    try:
+        st_folium(m, height=h)
+    except Exception as e:
+        st.error('El mapa no se pudo renderizar: '
+          + str(e))
+
 def leyenda(m, titulo, items, nota=''):
     h = ('<div style="position:fixed;'
       'bottom:24px;left:12px;z-index:999;'
@@ -178,12 +185,12 @@ def leyenda(m, titulo, items, nota=''):
           'border-radius:4px;'
           'vertical-align:-2px;'
           'box-shadow:inset 0 0 0 1px '
-          'rgba(0,0,0,.2);"></i>'
+          'rgba(0,0,0,.25);"></i>'
           '<span style="color:#12263f;">'
           + t + '</span></div>')
     if nota:
         h += ('<div style="margin-top:6px;'
-          'font-size:10px;color:#5a6b85;">'
+          'font-size:10px;color:#46587a;">'
           + nota + '</div>')
     h += '</div>'
     m.get_root().html.add_child(Element(h))
@@ -195,7 +202,8 @@ def lectura(txt):
 def chart_cfg(fig):
     fig.update_layout(
       template='plotly_white',
-      font=dict(family='Inter', size=12),
+      font=dict(family='Inter', size=12,
+                color='#12263f'),
       margin=dict(l=20, r=20, t=50, b=20))
 
 # ---------- navegación ----------
@@ -204,6 +212,7 @@ st.sidebar.caption('Sismo M7.4 · Colombia')
 op = st.sidebar.radio('Secciones', [
   '🏠 Inicio',
   '🌍 El sismo',
+  '🆚 Colombia vs Venezuela',
   '🎯 Intensidad (MMI)',
   '👥 Población expuesta',
   '🏗️ Edificaciones',
@@ -253,26 +262,26 @@ if op == '🏠 Inicio':
     leyenda(m, 'Intensidad (MMI)',
       [(x[1], x[0]) for x in MMI],
       nota='Render oficial USGS ShakeMap')
-    st_folium(m, height=540)
+    mostrar_mapa(m, 540)
     lectura('<b>Cómo leer el mapa:</b> los colores '
       'cálidos (amarillo→rojo) indican sacudida más '
       'fuerte. La estrella es el epicentro. Usa el '
-      'control de capas para ver base clara o '
-      'satélite.')
+      'control de capas (arriba a la derecha) para '
+      'alternar base clara o satélite.')
 
 # ============ EL SISMO ============
 elif op == '🌍 El sismo':
     st.title('🌍 El sismo en contexto')
     lectura('<b>Resumen:</b> un sismo de magnitud '
-      '7.4 con hipocentro profundo (~110 km) bajo '
+      '7.4 con hipocentro profundo (~107 km) bajo '
       'el Chocó. Al ser profundo, la sacudida se '
-      'sintió en un área muy amplia (todo el '
-      'occidente), pero el daño extremo quedó '
-      'más localizado que en un sismo superficial.')
+      'sintió en un área muy amplia, pero el daño '
+      'extremo quedó más localizado que en un sismo '
+      'superficial.')
     a, b = st.columns(2)
     with a:
         st.metric('Magnitud (Mw)', '7.4')
-        st.metric('Profundidad', '~110 km')
+        st.metric('Profundidad', '~107 km')
     with b:
         st.metric('Epicentro', '4.90°N, 76.19°O')
         st.metric('Fecha', '10-ago-2026')
@@ -297,7 +306,7 @@ elif op == '🌍 El sismo':
               color='crimson', fill=True,
               fill_opacity=0.5).add_to(m)
         epi(m)
-        st_folium(m, height=420)
+        mostrar_mapa(m, 420)
         c1, c2 = st.columns(2)
         with c1:
             fig = px.scatter(x=t_h, y=mags,
@@ -316,11 +325,153 @@ elif op == '🌍 El sismo':
       'qué decaen con el tiempo?'):
         st.write('Tras el sismo principal, la '
           'corteza se reajusta generando sismos '
-          'menores (réplicas). La ley de Omori '
-          'describe cómo su frecuencia decae con '
-          'el tiempo, y la de Gutenberg–Richter '
-          'cómo hay muchas pequeñas y pocas '
-          'grandes.')
+          'menores. La ley de Omori describe el '
+          'decaimiento de su frecuencia, y la de '
+          'Gutenberg–Richter por qué hay muchas '
+          'pequeñas y pocas grandes.')
+
+# ============ COMPARATIVA ============
+elif op == '🆚 Colombia vs Venezuela':
+    st.title('🆚 Dos sismos, dos historias')
+    lectura('<b>Más allá de la magnitud:</b> sismos '
+      'de tamaño similar pueden generar impactos '
+      'radicalmente diferentes. La profundidad, el '
+      'suelo y lo construido deciden el desastre.')
+    a, b = st.columns(2)
+    with a:
+        st.markdown('<div class="card card-col">'
+          '<h3>🇨🇴 Colombia · 10-ago-2026</h3>'
+          '<b>Mw 7.4 · Profundidad ~107 km</b>'
+          '<ul class="mini">'
+          '<li>Ruptura profunda: mayor recorrido de '
+          'las ondas hasta la superficie.</li>'
+          '<li>Mayor dispersión: las ondas se '
+          'atenúan antes de llegar.</li>'
+          '<li>Sacudida perceptible en una región '
+          'muy extensa, con menor violencia '
+          'puntual.</li></ul></div>',
+          unsafe_allow_html=True)
+    with b:
+        st.markdown('<div class="card card-ven">'
+          '<h3>🇻 Venezuela · 4-jun-2026</h3>'
+          '<b>Doblete Mw 7.2 + 7.5 · ~10–20 km</b>'
+          '<ul class="mini">'
+          '<li>Ruptura somera, muy próxima a zonas '
+          'urbanas.</li>'
+          '<li>Menor atenuación: las ondas golpean '
+          'con mayor energía.</li>'
+          '<li>Doblete sísmico: dos demandas '
+          'sucesivas sobre estructuras ya '
+          'degradadas por el primer evento.</li>'
+          '</ul></div>', unsafe_allow_html=True)
+    st.markdown('---')
+    c1, c2 = st.columns(2)
+    with c1:
+        fig = px.bar(
+          x=['Colombia', 'Venezuela'],
+          y=[107, 15],
+          labels={'y': 'Profundidad (km)',
+                  'x': ''},
+          title='Profundidad del hipocentro',
+          color=['Colombia', 'Venezuela'],
+          color_discrete_map={
+            'Colombia': '#2563eb',
+            'Venezuela': '#ea580c'})
+        chart_cfg(fig)
+        st.plotly_chart(fig, width='stretch')
+    with c2:
+        ds = list(range(10, 301, 10))
+        som = [120 * math.exp(-d / 90) + 4
+               for d in ds]
+        prof = [70 * math.exp(-d / 160) + 3
+                for d in ds]
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=ds, y=som,
+          mode='lines',
+          name='Somero (VEN)',
+          line={'color': '#ea580c', 'width': 3}))
+        fig.add_trace(go.Scatter(x=ds, y=prof,
+          mode='lines',
+          name='Profundo (COL)',
+          line={'color': '#2563eb', 'width': 3}))
+        fig.update_layout(
+          title='Atenuación con la distancia '
+          '(esquemático)',
+          xaxis_title='Distancia a la ruptura (km)',
+          yaxis_title='Sacudida relativa')
+        chart_cfg(fig)
+        st.plotly_chart(fig, width='stretch')
+    st.caption('Gráfico esquemático didáctico: un '
+      'sismo somero concentra daño extremo cerca de '
+      'la falla; uno profundo reparte sacudida '
+      'moderada en un área amplia.')
+    st.markdown('---')
+    st.subheader('El suelo transforma la sacudida')
+    a, b = st.columns(2)
+    with a:
+        st.markdown('<div class="card card-suelo">'
+          '<h3>🏜️ Amplificación (cuencas)</h3>'
+          '<ul class="mini">'
+          '<li>Depósitos blandos: mayor amplitud y '
+          'duración del movimiento.</li>'
+          '<li>Cuencas: reflejo y atrapamiento de '
+          'ondas.</li>'
+          '<li>Relieves: concentran o dispersan '
+          'según su geometría.</li></ul></div>',
+          unsafe_allow_html=True)
+    with b:
+        st.markdown('<div class="card card-suelo">'
+          '<h3>💦 Licuefacción de suelos</h3>'
+          '<ul class="mini">'
+          '<li>Pérdida súbita de resistencia del '
+          'terreno.</li>'
+          '<li>Requiere: suelo granular suelto + '
+          'saturación de agua + demanda cíclica '
+          'fuerte.</li>'
+          '<li>Las estructuras pueden hundirse o '
+          'inclinarse por pérdida de soporte.</li>'
+          '</ul></div>', unsafe_allow_html=True)
+    st.subheader('Cada estructura escucha un sismo '
+      'diferente')
+    a, b, c = st.columns(3)
+    with a:
+        st.markdown('<div class="card card-col">'
+          '<h3>🏠 Bajas (1–3 pisos)</h3>'
+          '<p class="mini">Resuenan con periodos '
+          'cortos (~0.3 s): alta frecuencia.</p>'
+          '</div>', unsafe_allow_html=True)
+    with b:
+        st.markdown('<div class="card card-col">'
+          '<h3>🏢 Medianas</h3>'
+          '<p class="mini">Sensibles a periodos '
+          'intermedios (~1.0 s).</p></div>',
+          unsafe_allow_html=True)
+    with c:
+        st.markdown('<div class="card card-col">'
+          '<h3>🏙️ Altas</h3>'
+          '<p class="mini">Resuenan con periodos '
+          'largos (~3.0 s): baja frecuencia.</p>'
+          '</div>', unsafe_allow_html=True)
+    lectura('<b>Compatibilidad espectral:</b> si el '
+      'suelo amplifica periodos cercanos al periodo '
+      'natural de una estructura, su respuesta y el '
+      'daño pueden aumentar dramáticamente. Misma '
+      'magnitud ≠ misma demanda para todos los '
+      'edificios.')
+    st.markdown('<div class="risk-banner">Riesgo '
+      'Sísmico = Amenaza × Exposición × '
+      'Vulnerabilidad</div>',
+      unsafe_allow_html=True)
+    with st.expander('Factores de vulnerabilidad y '
+      'normas'):
+        st.write('• Norma moderna ≠ desempeño: tener '
+          'un código avanzado (NSR-10, COVENIN) es '
+          'solo el primer paso; importa su '
+          'aplicación real.\n'
+          '• Edad y sistema estructural.\n'
+          '• Calidad de materiales y construcción.\n'
+          '• Detallado dúctil e irregularidades.\n'
+          '• Supervisión de obra y mantenimiento.')
 
 # ============ INTENSIDAD ============
 elif op == '🎯 Intensidad (MMI)':
@@ -346,12 +497,11 @@ elif op == '🎯 Intensidad (MMI)':
     leyenda(m, 'MMI',
       [(x[1], x[0]) for x in MMI],
       nota='Render oficial USGS ShakeMap')
-    st_folium(m, height=520)
+    mostrar_mapa(m, 520)
     with st.expander('¿Cómo se calculó este mapa?'):
         st.write('El USGS combina registros de '
           'acelerógrafos, reportes ciudadanos y '
-          'modelos de atenuación para estimar la '
-          'intensidad en cada punto. Mostramos el '
+          'modelos de atenuación. Mostramos el '
           'render oficial del ShakeMap.')
 
 # ============ POBLACIÓN ============
@@ -360,7 +510,7 @@ elif op == '👥 Población expuesta':
       'expuestas?')
     lectura('<b>Idea clave:</b> cruzamos el mapa de '
       'intensidad con el mapa de población '
-      '(WorldPop, 100 m). Así estimamos cuántas '
+      '(WorldPop, 100 m) para estimar cuántas '
       'personas viven en zonas con cada nivel de '
       'sacudida.')
     tot = suma(d_exp, 'pob_MMI6plus')
@@ -382,7 +532,7 @@ elif op == '👥 Población expuesta':
           tooltip=folium.GeoJsonTooltip(
             ['ADM1_NAME'])).add_to(m)
     epi(m)
-    st_folium(m, height=520)
+    mostrar_mapa(m, 520)
     a, b = st.columns(2)
     with a:
         if not d_exp.empty:
@@ -415,11 +565,10 @@ elif op == '👥 Población expuesta':
 elif op == '🏗️ Edificaciones':
     st.title('🏗️ Edificaciones e ingeniería')
     lectura('<b>Idea clave:</b> distintas '
-      'estructuras resuenan con distintos períodos '
-      'de vibración. Las <b>PSA</b> miden la '
-      'sacudida en cada período: 0.3 s afecta casas '
-      'bajas, 1.0 s edificios medios, 3.0 s puentes '
-      'y torres.')
+      'estructuras resuenan con distintos períodos. '
+      'Las <b>PSA</b> miden la sacudida en cada '
+      'período: 0.3 s casas bajas, 1.0 s edificios '
+      'medios, 3.0 s puentes y torres.')
     km2 = suma(d_con, 'km2_const_MMI6')
     st.metric('km² urbanos en MMI ≥ 6', fmt(km2))
     if not d_con.empty:
@@ -464,12 +613,11 @@ elif op == '🏗️ Edificaciones':
           'psa03', ascending=False),
           width='stretch')
     with st.expander('¿Cómo leer un espectro?'):
-        st.write('Cada línea es una ciudad. Si la '
-          'curva es alta en 0.3 s, las casas de 1–3 '
-          'pisos sufrieron más; si es alta en 1.0 s, '
-          'los edificios medios. Compara ciudades '
-          'para priorizar el tipo de revisión '
-          'estructural.')
+        st.write('Cada línea es una ciudad. Curva '
+          'alta en 0.3 s → sufren más las casas de '
+          '1–3 pisos; alta en 1.0 s → edificios '
+          'medios. Compara ciudades para priorizar '
+          'el tipo de revisión estructural.')
 
 # ============ SECUNDARIAS ============
 elif op == '⛰️ Amenazas secundarias':
@@ -490,7 +638,7 @@ elif op == '⛰️ Amenazas secundarias':
     m = mapa_base()
     overlay(m, capa, 0.75)
     epi(m)
-    st_folium(m, height=500)
+    mostrar_mapa(m, 500)
     if not d_sec.empty:
         a, b = st.columns(2)
         with a:
@@ -523,9 +671,9 @@ elif op == '✅ Validación':
     st.title('✅ Validación del modelo')
     lectura('<b>Idea clave:</b> comparamos el PGA '
       'modelado por el USGS con el PGA registrado '
-      'por estaciones sismológicas reales. Si los '
-      'puntos se acercan a la línea 1:1, el modelo '
-      'es confiable.')
+      'por estaciones reales. Si los puntos se '
+      'acercan a la línea 1:1, el modelo es '
+      'confiable.')
     if d_est.empty:
         st.info('El catálogo USGS no publica PGA '
           'por estación para este evento aún.')
@@ -533,7 +681,7 @@ elif op == '✅ Validación':
         overlay(m, 'intensity_overlay.png', 0.85,
                 BINT)
         epi(m)
-        st_folium(m, height=500)
+        mostrar_mapa(m, 500)
     else:
         a, b = st.columns(2)
         with a:
@@ -592,7 +740,10 @@ elif op == '📚 Aprende':
       ('Susceptibilidad', 'Probabilidad relativa de '
         'que una ladera falle por el sismo.'),
       ('Licuefacción', 'Pérdida de resistencia del '
-        'suelo saturado por la sacudida.')]
+        'suelo saturado por la sacudida.'),
+      ('Doblete sísmico', 'Dos sismos grandes '
+        'sucesivos: el segundo golpea estructuras '
+        'ya degradadas por el primero.')]
     for t, d in terms:
         with st.expander(t):
             st.write(d)
@@ -611,13 +762,29 @@ elif op == '🔬 Metodología y datos':
         "población a escala nativa (100 m); "
         "deslizamientos = PGA × pendiente; "
         "licuefacción = PGA × (1−pendiente) × "
-        "humedad; todo calibrado dentro de la zona "
+        "humedad; calibrado dentro de la zona "
         "sacudida (MMI ≥ 5).\n\n"
+        "**Comparativa regional:** el análisis "
+        "Colombia–Venezuela sigue el marco "
+        "conceptual Amenaza × Exposición × "
+        "Vulnerabilidad.\n\n"
         "**Limitaciones:** productos modelados; el "
         "raster MMI cubre el núcleo de sacudida; "
         "réplicas simuladas si la API no publica.")
     st.markdown(texto)
     st.markdown('---')
+    st.subheader('Estado de los archivos de datos')
+    rows = []
+    if os.path.exists(D):
+        for f in sorted(os.listdir(D)):
+            rows.append({'archivo': f,
+              'KB': round(os.path.getsize(
+                f'{D}/{f}') / 1024, 1)})
+        st.dataframe(pd.DataFrame(rows),
+          width='stretch')
+        st.caption('Si algún PNG pesa pocos KB, '
+          'puede estar vacío: repórtalo para '
+          'regenerarlo.')
     st.subheader('Descarga de datos')
     if os.path.exists(D):
         for f in sorted(os.listdir(D)):
