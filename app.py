@@ -11,13 +11,11 @@ import numpy as np
 import json, os, struct, math
 import requests
 import matplotlib
-matplotlib.use('Agg') # Usar backend no interactivo para matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 import plotly.express as px
 import plotly.graph_objects as go
-from matplotlib import cm
-from matplotlib.colors import Normalize, to_hex
 
 # Importaciones para mapas interactivos Leaflet y 3D
 import folium
@@ -29,7 +27,7 @@ import pydeck as pdk
 st.set_page_config(
   page_title='Observatorio Sismo Colombia 2026',
   page_icon='🌋', layout='wide')
-D = 'data' # Carpeta base de datos
+D = 'data'
 
 # Cargar estilos CSS personalizados si existen
 if os.path.exists('style.css'):
@@ -38,10 +36,9 @@ if os.path.exists('style.css'):
       unsafe_allow_html=True)
 
 # =====================================================================
-# FUNCIONES DE CARGA DEFENSIVA (Manejo de errores y codificación)
+# FUNCIONES DE CARGA DEFENSIVA
 # =====================================================================
 def csv_(n):
-    """Carga archivos CSV con manejo de errores de codificación UTF-8/Latin-1."""
     p = f'{D}/{n}'
     if not os.path.exists(p): return pd.DataFrame()
     try:
@@ -53,7 +50,6 @@ def csv_(n):
             return pd.DataFrame()
 
 def geo_(n):
-    """Carga archivos GeoJSON asegurando que tengan coordenadas válidas."""
     p = f'{D}/{n}'
     if not os.path.exists(p): return {'type': 'FeatureCollection', 'features': []}
     try:
@@ -64,17 +60,16 @@ def geo_(n):
         return {'type': 'FeatureCollection', 'features': []}
 
 # =====================================================================
-# CONFIGURACIÓN DE LÍMITES GEOGRÁFICOS (Bounds)
+# CONFIGURACIÓN DE LÍMITES GEOGRÁFICOS
 # =====================================================================
 bp = f'{D}/bounds.json'
 if os.path.exists(bp):
     W, S, E, N = json.load(open(bp, encoding='utf-8'))['bounds']
 else:
-    W, S, E, N = -79.3, 1.8, -73.1, 7.9 # Límites por defecto de Colombia
+    W, S, E, N = -79.3, 1.8, -73.1, 7.9
 BFLAT = [W, S, E, N]
 
 def bounds_png(png, pngw):
-    """Lee el worldfile (.pngw) para alinear correctamente las imágenes PNG en el mapa."""
     try:
         if not os.path.exists(png) or not os.path.exists(pngw): return None
         with open(png, 'rb') as f: head = f.read(33)
@@ -91,15 +86,13 @@ def bounds_png(png, pngw):
 BINT = bounds_png(f'{D}/intensity_overlay.png', f'{D}/intensity_overlay.pngw')
 if BINT is None: BINT = BFLAT
 
-# Coordenadas del epicentro
 EPI = [4.903, -76.189]
 
 # =====================================================================
-# CONSULTA A OPENSTREETMAP (HOT) - Infraestructura crítica en vivo
+# CONSULTA A OPENSTREETMAP (HOT)
 # =====================================================================
 @st.cache_data(show_spinner="Consultando infraestructura crítica en OpenStreetMap (HOT)...")
 def cargar_infra_osm():
-    """Consulta la API de Overpass para obtener hospitales y escuelas del área afectada."""
     overpass_url = "https://overpass-api.de/api/interpreter"
     query = """
     [out:json][timeout:50];
@@ -136,11 +129,10 @@ def cargar_infra_osm():
 osm_infra = cargar_infra_osm()
 
 # =====================================================================
-# CACHÉ DE DATOS LOCALES (CSV y GeoJSON)
+# CACHÉ DE DATOS LOCALES
 # =====================================================================
 @st.cache_data
 def cargar_datos():
-    """Carga y une los datos de exposición con los límites departamentales para los mapas."""
     d_exp = csv_('exposicion_deptos_MMI6.csv')
     d_mun = csv_('exposicion_municipios_MMI6.csv')
     d_con = csv_('construido_deptos_MMI6.csv')
@@ -154,7 +146,6 @@ def cargar_datos():
     try:
         import geopandas as gpd
         g_dep = gpd.GeoDataFrame.from_features(dep_gj['features'])
-        # Unión espacial para habilitar tooltips interactivos en el mapa
         if not d_exp.empty and 'ADM1_NAME' in d_exp.columns:
             possible_cols = ['ADM1_NAME', 'NOMBRE_DEP', 'NOMBRE', 'DPTO_NOMBRE']
             name_col = None
@@ -175,7 +166,6 @@ d_exp, d_mun, d_con, d_sec, d_ciu, d_est, rep, sint, g_dep = cargar_datos()
 
 AUTOR = ('Ensayo desarrollado por <b>Rafael Leonardo Ruiz Díaz</b> · un aporte para entender el sismo')
 
-# Escala de Mercalli Modificada (MMI)
 MMI = [
   ('IV', '#67a3ff', 'Moderado', 'Vibración como el paso de un camión.'),
   ('V', '#2ee6a8', 'Fuerte', 'Despierta a dormidos; caen objetos.'),
@@ -188,7 +178,6 @@ MMI = [
 # HELPERS Y FORMATO ESPAÑOL
 # =====================================================================
 def fmt(x, dec=0):
-    """Formatea números al estilo español: 1.234.567,89"""
     if pd.isna(x) or x is None: return '0'
     s = f"{x:,.{dec}f}"
     return s.replace(",", "X").replace(".", ",").replace("X", ".")
@@ -201,22 +190,19 @@ def lectura(txt):
     st.markdown('<div class="lectura">' + txt + '</div>', unsafe_allow_html=True)
 
 def chart_cfg(fig):
-    """Aplica configuración visual estandarizada a los gráficos de Plotly."""
     fig.update_layout(
         template='plotly_white',
         font=dict(family='Inter', size=12, color='#12263f'),
         margin=dict(l=20, r=20, t=50, b=20),
-        separators='.,' # Forzar comas para decimales y puntos para miles
+        separators='.,'
     )
 
 # =====================================================================
 # MAPA LEAFLET INTERACTIVO
 # =====================================================================
 def mapa_interactivo(titulo, capa=None, bb=None, coro=None, items=None, nota=None, puntos=None, infra=None):
-    """Genera un mapa Folium con capas, overlays, coropletas y marcadores interactivos."""
     m = folium.Map(location=[EPI[0], EPI[1]], zoom_start=6, tiles='CartoDB positron', control_scale=True)
 
-    # 1. Capa GeoJSON (Límites o Coropleta)
     if g_dep is not None:
         if coro is None:
             folium.GeoJson(
@@ -245,7 +231,6 @@ def mapa_interactivo(titulo, capa=None, bb=None, coro=None, items=None, nota=Non
             ).add_to(m)
             m.add_child(colormap)
 
-    # 2. Capa de Imagen (Overlay PNG)
     if capa:
         p = f'{D}/{capa}'
         if os.path.exists(p):
@@ -256,14 +241,12 @@ def mapa_interactivo(titulo, capa=None, bb=None, coro=None, items=None, nota=Non
             m.fit_bounds(bounds)
         else: st.caption('⚠️ Falta: ' + capa)
 
-    # 3. Marcadores de Réplicas
     if puntos:
         fg_rep = folium.FeatureGroup(name='♻️ Réplicas')
         for lon, lat, r in puntos:
             folium.CircleMarker(location=[lat, lon], radius=r, color='white', weight=0.6, fill=True, fill_color='#d10000', fill_opacity=0.7).add_to(fg_rep)
         fg_rep.add_to(m)
 
-    # 4. Marcadores de Infraestructura (HOT/OSM)
     if infra:
         fg_hosp = folium.FeatureGroup(name='🏥 Hospitales (OSM)')
         fg_esc = folium.FeatureGroup(name='🏫 Escuelas (OSM)')
@@ -273,10 +256,8 @@ def mapa_interactivo(titulo, capa=None, bb=None, coro=None, items=None, nota=Non
             else: marker.add_to(fg_esc)
         fg_hosp.add_to(m); fg_esc.add_to(m)
 
-    # 5. Marcador del Epicentro
     folium.Marker(location=[EPI[0], EPI[1]], tooltip='Epicentro (M7.4)', icon=folium.Icon(color='red', icon='star', prefix='fa')).add_to(m)
 
-    # 6. Leyenda HTML personalizada flotante
     if items:
         legend_html = """<div style="position: fixed; bottom: 40px; left: 40px; z-index: 9999; background-color: white; padding: 10px; border-radius: 5px; border: 1px solid #8895a8; box-shadow: 2px 2px 5px rgba(0,0,0,0.2);"><h6 style="margin:0 0 5px 0; color:#0b1f3a; font-weight:bold;">""" + titulo + """</h6>"""
         for c, t in items:
@@ -285,10 +266,7 @@ def mapa_interactivo(titulo, capa=None, bb=None, coro=None, items=None, nota=Non
         legend_html += "</div>"
         m.get_root().html.add_child(folium.Element(legend_html))
 
-    # 7. Control de capas
     folium.LayerControl(collapsed=False).add_to(m)
-    
-    # Renderizar mapa en Streamlit (height=500 para diseño responsive)
     st_folium(m, width=None, height=500, returned_objects=[])
 
 # =====================================================================
@@ -298,7 +276,6 @@ def sec_inicio():
     st.markdown('<div class="hero"><h1 style="color:#ffffff !important;">Terremoto de Colombia M7.4</h1><p>Observatorio ciudadano de exposición y riesgo · 10 de agosto de 2026</p><span class="badge">USGS ShakeMap</span><span class="badge">WorldPop</span><span class="badge">HOT / OpenStreetMap</span><div class="autor">' + AUTOR + '</div></div>', unsafe_allow_html=True)
     lectura('<b>¿Qué es este sitio?</b> Un panel interactivo que traduce los datos técnicos del sismo en información comprensible: cuántas personas sintieron el temblor, qué zonas pueden sufrir deslizamientos y qué ciudades deben priorizar revisiones.')
     
-    # Métricas clave
     tot = suma(d_exp, 'pob_MMI6plus'); km2 = suma(d_con, 'km2_const_MMI6')
     n_dep = int((d_exp.pob_MMI6plus > 0).sum()) if not d_exp.empty else 0
     n_mun = int((d_mun.pob_MMI6plus > 0).sum()) if not d_mun.empty else 0
@@ -339,23 +316,20 @@ def sec_3d():
     st.title('⛰️ Modelo de Elevación 3D Interactivo')
     lectura('<b>Idea clave:</b> la compleja topografía de la región (la Cordillera Occidental de los Andes bajando hacia el Océano Pacífico) influye en cómo se propagan las ondas sísmicas y en la susceptibilidad a deslizamientos. Explora el terreno en 3D.')
     
-    # Configuración de la cámara 3D
     view_state = pdk.ViewState(
         latitude=EPI[0], longitude=EPI[1], zoom=8.5, pitch=65, bearing=45
     )
 
-    # Capa de terreno 3D. Se usan bounds y mesh_max_error para evitar picos de ruido en la malla.
     terrain_layer = pdk.Layer(
         "TerrainLayer",
         elevation_data="https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png",
         texture="https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
         elevation_decoder={"rScaler": 256, "gScaler": 1, "bScaler": 1/256, "offset": -32768},
-        bounds=[W, S, E, N],     # Limita la carga a la caja de coordenadas
-        mesh_max_error=50.0,     # Suaviza la malla para eliminar picos anormales
+        bounds=[W, S, E, N],
+        mesh_max_error=50.0,
         opacity=1
     )
 
-    # Marcador rojo del epicentro flotando a 5000m de altura
     scatter_data = [{'lat': EPI[0], 'lon': EPI[1], 'z': 5000}]
     epicenter_layer = pdk.Layer(
         "ScatterplotLayer", data=scatter_data, get_position=['lon', 'lat', 'z'],
@@ -374,9 +348,7 @@ def sec_comparativa():
     st.title('🆚 Dos sismos, dos historias')
     lectura('<b>Más allá de la magnitud:</b> por qué sismos de tamaño similar pueden generar impactos radicalmente diferentes. De la roca a la ciudad.')
     a, b = st.columns(2)
-    # Caso Colombia
     with a: st.markdown('<div class="card card-col"><h3>🏔️ Caso Colombia · 10-ago-2026</h3><b>Mw 7.4 · Profundidad ~107 km</b><ul class="mini"><li><b>Ruptura profunda:</b> mayor recorrido de las ondas hasta la superficie.</li><li><b>Mayor dispersión:</b> las ondas se atenúan significativamente antes de llegar.</li><li><b>Área afectada:</b> movimiento perceptible en una región muy extensa, con menor violencia puntual.</li></ul></div>', unsafe_allow_html=True)
-    # Caso Venezuela (Fecha corregida a 24-jun-2026)
     with b: st.markdown('<div class="card card-ven"><h3>🏙️ Caso Venezuela · 24-jun-2026</h3><b>Doblete Mw 7.2 + 7.5 · ~10–20 km</b><ul class="mini"><li><b>Ruptura somera:</b> muy próxima a zonas urbanas.</li><li><b>Menor atenuación:</b> las ondas golpean con mayor energía.</li><li><b>Doblete sísmico:</b> dos demandas sucesivas sobre estructuras posiblemente degradadas por el primer evento.</li></ul></div>', unsafe_allow_html=True)
     
     st.markdown('---'); c1, c2 = st.columns(2)
@@ -425,7 +397,9 @@ def sec_poblacion():
     if g_dep is not None and not d_exp.empty:
         vals = dict(zip(d_exp.ADM1_NAME, d_exp.pob_MMI6plus))
         coro = [vals.get(n, 0) for n in g_dep.ADM1_NAME] if 'ADM1_NAME' in g_dep.columns else None
-    mapa_interactivo('Población expuesta', coro=coro, items=[(to_hex(CMAP(0.15)), 'Baja'), (to_hex(CMAP(0.5)), 'Media'), (to_hex(CMAP(0.9)), 'Alta')], nota='Coropleta: personas en MMI ≥ 6 por departamento', infra=osm_infra)
+    # Corrección: colores hexadecimales directos para evitar errores con matplotlib
+    items = [('#fee5d9', 'Baja'), ('#fb6a4a', 'Media'), ('#a50f15', 'Alta')]
+    mapa_interactivo('Población expuesta', coro=coro, items=items, nota='Coropleta: personas en MMI ≥ 6 por departamento', infra=osm_infra)
     a, b = st.columns(2)
     with a:
         if not d_exp.empty:
@@ -456,7 +430,6 @@ def sec_edificaciones():
             if rr.empty: continue
             r = rr.iloc[0]
             fig.add_trace(go.Scatter(x=TS, y=[r[k] for k in cols], mode='lines+markers', name=c))
-        # Líneas verticales para mostrar resonancia según tipo de estructura
         fig.add_vline(x=0.3, line_width=2, line_dash="dash", line_color="blue")
         fig.add_annotation(x=0.3, y=0.1, text="Casas (0,3s)", textangle=-90, font=dict(color="blue", size=10))
         fig.add_vline(x=1.0, line_width=2, line_dash="dash", line_color="orange")
@@ -466,7 +439,6 @@ def sec_edificaciones():
         fig.update_layout(xaxis_type='log', yaxis_type='log', xaxis_title='Período (s)', yaxis_title='Sa (%g)', title='Espectros de respuesta con resonancia estructural')
         chart_cfg(fig); st.plotly_chart(fig, width='stretch')
         
-        # Tabla formateada en español
         d_ciu_fmt = d_ciu.sort_values('psa03', ascending=False).copy()
         num_cols = d_ciu_fmt.select_dtypes(include=['float', 'int']).columns
         for col in num_cols:
@@ -517,7 +489,6 @@ def sec_hotosm():
     st.subheader('Mapa de Respuesta Humanitaria')
     st.caption('Organizado por **OSM Colombia** con apoyo de **UN Mappers Argentina** y **HOT**')
     
-    # Iframe de uMap responsivo
     hotosm_iframe = """
     <div style="width:100%; position:relative; padding-bottom:56.25%; height:0; overflow:hidden; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
         <iframe src="https://umap.hotosm.org/en/map/colombia-m-74-earthquake-10-ago-2026_3482?scaleControl=false&miniMap=false&scrollWheelZoom=false&zoomControl=true&allowEdit=false&moreControl=true&searchControl=false&tilelayersControl=null&embedControl=null&datalayersControl=true&onLoadPanel=none&captionBar=false&captionMenus=true" 
