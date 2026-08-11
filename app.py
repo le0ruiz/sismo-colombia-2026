@@ -20,7 +20,6 @@ st.set_page_config(
   layout='wide')
 D = 'data'
 
-# ---------- carga defensiva ----------
 def csv_(n):
     p = f'{D}/{n}'
     if not os.path.exists(p):
@@ -77,7 +76,6 @@ op = st.sidebar.radio('Sección', [
   'Validación',
   'Metodología'])
 
-# ---------- helpers de mapa ----------
 def mapa_base(zoom=7):
     m = folium.Map(location=[4.9, -76.2],
                    zoom_start=zoom)
@@ -358,5 +356,31 @@ elif op == 'Validación':
 # ============ 7. METODOLOGÍA ============
 elif op == 'Metodología':
     st.title('Metodología y datos')
-    st.markdown('''
-**Fuentes:** USGS Shake
+    texto = (
+        "**Fuentes:** USGS ShakeMap "
+        "us6000tjl2 · WorldPop 2020 · "
+        "ESA WorldCover · VIIRS · SRTM · "
+        "CHIRPS · Sentinel-1 · FAO GAUL.\n\n"
+        "**Método:** exposición = "
+        "ShakeMap MMI × población a "
+        "escala nativa (100 m); índice "
+        "de riesgo H×E×V; susceptibilidad "
+        "de deslizamientos = "
+        "PGA × pendiente; licuefacción = "
+        "PGA × (1−pendiente) × humedad; "
+        "cambio SAR = |log-ratio VH| "
+        "pre/post.\n\n"
+        "**Limitaciones:** el raster MMI "
+        "cubre el núcleo de sacudida "
+        "(máx 6.9); WorldPop y ShakeMap "
+        "son productos modelados; "
+        "réplicas simuladas si la API "
+        "no publica."
+    )
+    st.markdown(texto)
+    if os.path.exists(D):
+        for f in sorted(os.listdir(D)):
+            if f.endswith('.csv'):
+                st.download_button(
+                    f, open(f'{D}/{f}', 'rb').read(),
+                    file_name=f, key=f)
