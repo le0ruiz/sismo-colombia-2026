@@ -320,7 +320,6 @@ def sec_3d():
             {'name': 'Ansermanuevo', 'lat': 4.797, 'lon': -75.995, 'pop': 12332, 'psa03': 0.35},
         ]
 
-    # Convertir ciudades a GeoJSON FeatureCollection para MapLibre
     geojson_ciudades = {
         "type": "FeatureCollection",
         "features": [
@@ -335,7 +334,6 @@ def sec_3d():
     epi_lat, epi_lon = EPI[0], EPI[1]
     w, s, e, n = W, S, E, N
 
-    # MAPA MAPLIBRE GL 3D - CORREGIDO
     maplibre_html = """<!DOCTYPE html>
 <html>
 <head>
@@ -345,7 +343,7 @@ def sec_3d():
     <link href="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.css" rel="stylesheet"/>
     <style>
         html, body { margin:0; padding:0; height:100%; overflow:hidden; font-family: 'Segoe UI', sans-serif; background:#0f172a; }
-        #map { position:absolute; top:0; left:0; width:100%; height:100%; }
+        #map { position:absolute; top:0; left:0; width:100%; height:650px; }
         .panel { position:absolute; top:10px; left:10px; background:rgba(15,23,42,0.92); backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,0.1); border-radius:10px; padding:12px 14px; color:#fff; max-width:230px; z-index:10; box-shadow:0 4px 20px rgba(0,0,0,0.4); }
         .panel h3 { margin:0 0 6px 0; font-size:14px; font-weight:500; }
         .panel .meta { font-size:11px; color:rgba(255,255,255,0.5); margin-bottom:8px; }
@@ -423,8 +421,7 @@ def sec_3d():
             layers: [
                 { id: 'osm', type: 'raster', source: 'osm' },
                 { id: 'hillshade', type: 'hillshade', source: 'hillshadeSource', paint: { 'hillshade-exaggeration': 0.8, 'hillshade-shadow-color': '#000000', 'hillshade-highlight-color': '#ffffff', 'hillshade-accent-color': '#333333', 'hillshade-illumination-anchor': 'viewport', 'hillshade-illumination-direction': 315 } }
-            ],
-            terrain: { source: 'terrainSource', exaggeration: 2.0 }
+            ]
         };
         
         const map = new maplibregl.Map({ container: 'map', style: styleBase, center: epi, zoom: 8.5, pitch: 70, bearing: -30, maxPitch: 85, antialias: true });
@@ -433,8 +430,18 @@ def sec_3d():
         map.addControl(new maplibregl.ScaleControl({ maxWidth: 100, unit: 'metric' }), 'bottom-left');
         
         map.on('load', () => {
-            // Capa del epicentro
-            map.addSource('epi', { type: 'geojson', data: { type: 'Point', coordinates: epi } });
+            // Forzar terreno
+            map.setTerrain({ source: 'terrainSource', exaggeration: 2.0 });
+            
+            // CORRECCIÓN: GeoJSON Feature estricto para el epicentro
+            map.addSource('epi', { 
+                type: 'geojson', 
+                data: { 
+                    type: 'Feature', 
+                    geometry: { type: 'Point', coordinates: epi }, 
+                    properties: { name: 'Epicentro M7.4' } 
+                } 
+            });
             map.addLayer({
                 id: 'epi-circle',
                 type: 'circle',
@@ -444,23 +451,7 @@ def sec_3d():
                     'circle-color': '#ff3333',
                     'circle-stroke-width': 3,
                     'circle-stroke-color': '#ffffff',
-                    'circle-pitch-alignment': 'viewport' // Hace que mire a la cámara
-                }
-            });
-            map.addLayer({
-                id: 'epi-label',
-                type: 'symbol',
-                source: 'epi',
-                layout: {
-                    'text-field': 'Epicentro M7.4',
-                    'text-offset': [0, 1.5],
-                    'text-anchor': 'top',
-                    'text-size': 12
-                },
-                paint: {
-                    'text-color': '#ffffff',
-                    'text-halo-color': '#ff3333',
-                    'text-halo-width': 1
+                    'circle-pitch-alignment': 'viewport'
                 }
             });
 
@@ -475,7 +466,7 @@ def sec_3d():
                     'circle-color': ['case', ['>', ['get', 'psa03'], 0.2], '#ff8844', ['>', ['get', 'psa03'], 0.1], '#ffcc44', '#44aaff'],
                     'circle-stroke-width': 2,
                     'circle-stroke-color': '#ffffff',
-                    'circle-pitch-alignment': 'viewport' // Hace que mire a la cámara
+                    'circle-pitch-alignment': 'viewport'
                 }
             });
 
@@ -496,7 +487,16 @@ def sec_3d():
             });
             map.on('mouseleave', 'ciudades-circle', () => { map.getCanvas().style.cursor = ''; popup.remove(); });
 
-            map.addSource('bounds', { type: 'geojson', data: { type: 'Feature', geometry: { type: 'Polygon', coordinates: [[[__W__,__S__],[__E__,__S__],[__E__,__N__],[__W__,__N__],[__W__,__S__]]] } } });
+            map.addSource('bounds', { 
+                type: 'geojson', 
+                data: { 
+                    type: 'Feature', 
+                    geometry: { 
+                        type: 'Polygon', 
+                        coordinates: [[[__W__,__S__],[__E__,__S__],[__E__,__N__],[__W__,__N__],[__W__,__S__]]] 
+                    } 
+                } 
+            });
             map.addLayer({ id: 'bounds-line', type: 'line', source: 'bounds', paint: { 'line-color': 'rgba(100,180,255,0.3)', 'line-width': 1, 'line-dasharray': [3,3] } });
         });
         
