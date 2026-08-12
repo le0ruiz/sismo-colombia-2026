@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # =====================================================================
 # Observatorio Sísmico Interactivo: Colombia 2026
 # Autor: Rafael Leonardo Ruiz Díaz
@@ -320,11 +319,21 @@ def sec_3d():
             {'name': 'Ansermanuevo', 'lat': 4.797, 'lon': -75.995, 'pop': 12332, 'psa03': 0.35},
         ]
 
-    ciudades_json = json.dumps(ciudades)
+    # Convertir ciudades a GeoJSON FeatureCollection para MapLibre
+    geojson_ciudades = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [c['lon'], c['lat']]},
+                "properties": {"name": c['name'], "pop": c['pop'], "psa03": c['psa03']}
+            } for c in ciudades
+        ]
+    }
+    ciudades_json = json.dumps(geojson_ciudades)
     epi_lat, epi_lon = EPI[0], EPI[1]
     w, s, e, n = W, S, E, N
 
-    # HTML MAPLIBRE CORREGIDO: Altura fija y carga de terreno en el evento 'load' para máxima compatibilidad
     maplibre_html = """<!DOCTYPE html>
 <html>
 <head>
@@ -333,8 +342,8 @@ def sec_3d():
     <script src="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.js"></script>
     <link href="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.css" rel="stylesheet"/>
     <style>
-        body { margin:0; padding:0; overflow:hidden; font-family: 'Segoe UI', sans-serif; background:#0f172a; }
-        #map { position:absolute; top:0; bottom:0; width:100%; height:600px; }
+        html, body { margin:0; padding:0; height:100%; overflow:hidden; font-family: 'Segoe UI', sans-serif; background:#0f172a; }
+        #map { position:absolute; top:0; left:0; width:100%; height:100%; }
         .panel { position:absolute; top:10px; left:10px; background:rgba(15,23,42,0.92); backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,0.1); border-radius:10px; padding:12px 14px; color:#fff; max-width:230px; z-index:10; box-shadow:0 4px 20px rgba(0,0,0,0.4); }
         .panel h3 { margin:0 0 6px 0; font-size:14px; font-weight:500; }
         .panel .meta { font-size:11px; color:rgba(255,255,255,0.5); margin-bottom:8px; }
@@ -399,14 +408,14 @@ def sec_3d():
                     tiles: ['https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png'], 
                     tileSize: 256, 
                     encoding: 'terrarium',
-                    maxzoom: 15
+                    maxzoom: 14
                 },
                 hillshadeSource: { 
                     type: 'raster-dem', 
                     tiles: ['https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png'], 
                     tileSize: 256, 
                     encoding: 'terrarium',
-                    maxzoom: 15
+                    maxzoom: 14
                 }
             },
             layers: [
@@ -421,24 +430,53 @@ def sec_3d():
         map.addControl(new maplibregl.ScaleControl({ maxWidth: 100, unit: 'metric' }), 'bottom-left');
         
         map.on('load', () => {
-            // INICIALIZAR TERRENO AQUÍ
+            // Forzar terreno
             map.setTerrain({ source: 'terrainSource', exaggeration: 1.5 });
             
-            const el = document.createElement('div');
-            el.style.cssText = 'width:20px;height:20px;border-radius:50%;background:#ff3333;border:3px solid #ffaaaa;box-shadow:0 0 0 0 rgba(255,50,50,0.7);animation:pulse 2s infinite;cursor:pointer;';
-            const style = document.createElement('style');
-            style.textContent = '@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,50,50,0.7);}70%{box-shadow:0 0 0 15px rgba(255,50,50,0);}100%{box-shadow:0 0 0 0 rgba(255,50,50,0);}}';
-            document.head.appendChild(style);
-            
-            new maplibregl.Marker(el).setLngLat(epi).setPopup(new maplibregl.Popup({offset:12}).setHTML('<b>Epicentro M7.4</b><br>Profundidad: 107 km<br>Lat: __EPI_LAT__°N, Lon: __EPI_LON_ABS__°O')).addTo(map);
-            
-            ciudades.forEach(c => {
-                const color = c.psa03 > 0.2 ? '#ff8844' : (c.psa03 > 0.1 ? '#ffcc44' : '#44aaff');
-                const cityEl = document.createElement('div');
-                cityEl.style.cssText = `width:10px;height:10px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.4);cursor:pointer;`;
-                new maplibregl.Marker(cityEl).setLngLat([c.lon, c.lat]).setPopup(new maplibregl.Popup({offset:10}).setHTML(`<b>${c.name}</b><br>Poblacion expuesta: ${c.pop.toLocaleString()}<br>PSA 0.3s: ${c.psa03}g`)).addTo(map);
+            // Capa del epicentro (Círculo nativo de MapLibre para garantizar visibilidad)
+            map.addSource('epi', { type: 'geojson', data: { type: 'Point', coordinates: epi } });
+            map.addLayer({
+                id: 'epi-circle',
+                type: 'circle',
+                source: 'epi',
+                paint: {
+                    'circle-radius': 8,
+                    'circle-color': '#ff3333',
+                    'circle-stroke-width': 2,
+                    'circle-stroke-color': '#ffffff'
+                }
             });
+
+            // Capa de ciudades (Círculos nativos de MapLibre)
+            map.addSource('ciudades', { type: 'geojson', data: ciudades });
+            map.addLayer({
+                id: 'ciudades-circle',
+                type: 'circle',
+                source: 'ciudades',
+                paint: {
+                    'circle-radius': 6,
+                    'circle-color': ['case', ['>', ['get', 'psa03'], 0.2], '#ff8844', ['>', ['get', 'psa03'], 0.1], '#ffcc44', '#44aaff'],
+                    'circle-stroke-width': 1.5,
+                    'circle-stroke-color': '#ffffff'
+                }
+            });
+
+            // Popups interactivos
+            const popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false });
             
+            map.on('mouseenter', 'epi-circle', () => { map.getCanvas().style.cursor = 'pointer'; });
+            map.on('mousemove', 'epi-circle', (e) => {
+                popup.setLngLat(epli).setHTML('<b>Epicentro M7.4</b><br>Profundidad: 107 km').addTo(map);
+            });
+            map.on('mouseleave', 'epi-circle', () => { map.getCanvas().style.cursor = ''; popup.remove(); });
+
+            map.on('mouseenter', 'ciudades-circle', () => { map.getCanvas().style.cursor = 'pointer'; });
+            map.on('mousemove', 'ciudades-circle', (e) => {
+                const f = e.features[0];
+                popup.setLngLat(f.geometry.coordinates).setHTML(`<b>${f.properties.name}</b><br>Poblacion expuesta: ${f.properties.pop}<br>PSA 0.3s: ${f.properties.psa03}g`).addTo(map);
+            });
+            map.on('mouseleave', 'ciudades-circle', () => { map.getCanvas().style.cursor = ''; popup.remove(); });
+
             map.addSource('bounds', { type: 'geojson', data: { type: 'Feature', geometry: { type: 'Polygon', coordinates: [[[__W__,__S__],[__E__,__S__],[__E__,__N__],[__W__,__N__],[__W__,__S__]]] } } });
             map.addLayer({ id: 'bounds-line', type: 'line', source: 'bounds', paint: { 'line-color': 'rgba(100,180,255,0.3)', 'line-width': 1, 'line-dasharray': [3,3] } });
         });
@@ -486,7 +524,7 @@ def sec_3d():
     maplibre_html = maplibre_html.replace("__E__", str(e))
     maplibre_html = maplibre_html.replace("__N__", str(n))
 
-    components.html(maplibre_html, height=620, scrolling=False)
+    components.html(maplibre_html, height=650, scrolling=False)
 
     st.markdown('---')
     c1, c2, c3, c4, c5 = st.columns(5)
