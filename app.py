@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # =====================================================================
 # Observatorio Sísmico Interactivo: Colombia 2026
 # Autor: Rafael Leonardo Ruiz Díaz
@@ -421,7 +422,9 @@ def sec_3d():
             layers: [
                 { id: 'osm', type: 'raster', source: 'osm' },
                 { id: 'hillshade', type: 'hillshade', source: 'hillshadeSource', paint: { 'hillshade-exaggeration': 0.8, 'hillshade-shadow-color': '#000000', 'hillshade-highlight-color': '#ffffff', 'hillshade-accent-color': '#333333', 'hillshade-illumination-anchor': 'viewport', 'hillshade-illumination-direction': 315 } }
-            ]
+            ],
+            // Definir el terreno en el estilo base para que cargue automáticamente
+            terrain: { source: 'terrainSource', exaggeration: 1.5 }
         };
         
         const map = new maplibregl.Map({ container: 'map', style: styleBase, center: epi, zoom: 8.5, pitch: 60, bearing: -30, maxPitch: 85, antialias: true });
@@ -430,10 +433,7 @@ def sec_3d():
         map.addControl(new maplibregl.ScaleControl({ maxWidth: 100, unit: 'metric' }), 'bottom-left');
         
         map.on('load', () => {
-            // Forzar terreno
-            map.setTerrain({ source: 'terrainSource', exaggeration: 1.5 });
-            
-            // Capa del epicentro (Círculo nativo de MapLibre para garantizar visibilidad)
+            // Capa del epicentro (Círculo nativo de MapLibre)
             map.addSource('epi', { type: 'geojson', data: { type: 'Point', coordinates: epi } });
             map.addLayer({
                 id: 'epi-circle',
@@ -461,17 +461,18 @@ def sec_3d():
                 }
             });
 
-            // Popups interactivos
+            // Popups interactivos corregidos
             const popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false });
             
             map.on('mouseenter', 'epi-circle', () => { map.getCanvas().style.cursor = 'pointer'; });
             map.on('mousemove', 'epi-circle', (e) => {
-                popup.setLngLat(epli).setHTML('<b>Epicentro M7.4</b><br>Profundidad: 107 km').addTo(map);
+                popup.setLngLat(e.lngLat).setHTML('<b>Epicentro M7.4</b><br>Profundidad: 107 km').addTo(map);
             });
             map.on('mouseleave', 'epi-circle', () => { map.getCanvas().style.cursor = ''; popup.remove(); });
 
             map.on('mouseenter', 'ciudades-circle', () => { map.getCanvas().style.cursor = 'pointer'; });
             map.on('mousemove', 'ciudades-circle', (e) => {
+                if (!e.features.length) return;
                 const f = e.features[0];
                 popup.setLngLat(f.geometry.coordinates).setHTML(`<b>${f.properties.name}</b><br>Poblacion expuesta: ${f.properties.pop}<br>PSA 0.3s: ${f.properties.psa03}g`).addTo(map);
             });
