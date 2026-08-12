@@ -39,6 +39,8 @@ Método:
 Exposición: ShakeMap MMI × población a escala nativa (100 m).
 Deslizamientos: PGA × pendiente.
 Licuefacción: PGA × (1−pendiente) × humedad.
+
 👤 Autor
 Rafael Leonardo Ruiz Díaz
+
 Ensayo de divulgación para entender el sismo. Un aporte para entender que el Riesgo Sísmico = Amenaza × Exposición × Vulnerabilidad.
