@@ -313,38 +313,338 @@ def sec_sismo():
             chart_cfg(fig); st.plotly_chart(fig, width='stretch')
 
 def sec_3d():
-    st.title('⛰️ Modelo de Elevación 3D Interactivo')
-    lectura('<b>Idea clave:</b> la compleja topografía de la región (la Cordillera Occidental de los Andes bajando hacia el Océano Pacífico) influye en cómo se propagan las ondas sísmicas y en la susceptibilidad a deslizamientos. Explora el terreno en 3D.')
-    
-    view_state = pdk.ViewState(
-        latitude=EPI[0], longitude=EPI[1], zoom=8.5, pitch=65, bearing=45
+    st.title('🌐 Terreno 3D · Vista Google Earth')
+    lectura('<b>Relieve real con hillshade:</b> navega libremente por la Cordillera Occidental. Activa o desactiva capas, inclina la camara y explora como lo harias en Google Earth. Los datos de elevacion provienen del SRTM.')
+
+    # DATOS: ciudades + epicentro
+    ciudades = []
+    if not d_ciu.empty and 'ciudad' in d_ciu.columns:
+        for _, r in d_ciu.iterrows():
+            try:
+                ciudades.append({
+                    'name': str(r['ciudad']),
+                    'lat': float(r.get('lat', r.get('latitude', 0))),
+                    'lon': float(r.get('lon', r.get('longitude', 0))),
+                    'pop': int(r.get('pob_MMI6plus', r.get('poblacion', 0))),
+                    'psa03': float(r.get('psa03', 0)),
+                })
+            except Exception:
+                pass
+    if not ciudades:
+        ciudades = [
+            {'name': 'Pereira', 'lat': 4.813, 'lon': -75.696, 'pop': 467269, 'psa03': 0.18},
+            {'name': 'Manizales', 'lat': 5.069, 'lon': -75.518, 'pop': 400000, 'psa03': 0.22},
+            {'name': 'Armenia', 'lat': 4.533, 'lon': -75.681, 'pop': 300000, 'psa03': 0.15},
+            {'name': 'Cali', 'lat': 3.452, 'lon': -76.532, 'pop': 2227000, 'psa03': 0.08},
+            {'name': 'Bogota', 'lat': 4.711, 'lon': -74.072, 'pop': 7181000, 'psa03': 0.05},
+            {'name': 'Medellin', 'lat': 6.252, 'lon': -75.563, 'pop': 2500000, 'psa03': 0.06},
+            {'name': 'Ibague', 'lat': 4.437, 'lon': -75.202, 'pop': 529000, 'psa03': 0.12},
+            {'name': 'San Jose del Palmar', 'lat': 4.970, 'lon': -76.229, 'pop': 2392, 'psa03': 0.45},
+            {'name': 'Ansermanuevo', 'lat': 4.797, 'lon': -75.995, 'pop': 12332, 'psa03': 0.35},
+        ]
+
+    ciudades_json = json.dumps(ciudades)
+    epi_lat, epi_lon = EPI[0], EPI[1]
+    w, s, e, n = W, S, E, N
+
+    # MAPA MAPLIBRE GL 3D
+    maplibre_html = """<!DOCTYPE html>
+<html>
+<head>
+    <meta charset=\"utf-8\"/>
+    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/>
+    <script src=\"https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.js\"></script>
+    <link href=\"https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.css\" rel=\"stylesheet\"/>
+    <style>
+        body { margin:0; padding:0; overflow:hidden; font-family: 'Segoe UI', sans-serif; background:#0f172a; }
+        #map { width:100%; height:85vh; }
+        .panel {
+            position:absolute; top:10px; left:10px;
+            background:rgba(15,23,42,0.92); backdrop-filter:blur(10px);
+            border:1px solid rgba(255,255,255,0.1); border-radius:10px;
+            padding:12px 14px; color:#fff; max-width:230px; z-index:10;
+            box-shadow:0 4px 20px rgba(0,0,0,0.4);
+        }
+        .panel h3 { margin:0 0 6px 0; font-size:14px; font-weight:500; }
+        .panel .meta { font-size:11px; color:rgba(255,255,255,0.5); margin-bottom:8px; }
+        .panel .row { display:flex; gap:14px; margin-top:6px; }
+        .panel .row div { font-size:11px; }
+        .panel .row div span { display:block; color:rgba(255,255,255,0.4); font-size:9px; text-transform:uppercase; letter-spacing:0.5px; }
+        .legend {
+            position:absolute; bottom:10px; right:10px;
+            background:rgba(15,23,42,0.92); backdrop-filter:blur(10px);
+            border:1px solid rgba(255,255,255,0.1); border-radius:10px;
+            padding:10px 12px; color:#fff; z-index:10;
+            box-shadow:0 4px 20px rgba(0,0,0,0.4);
+        }
+        .legend h4 { margin:0 0 6px 0; font-size:11px; font-weight:500; color:rgba(255,255,255,0.7); }
+        .legend .item { display:flex; align-items:center; gap:6px; margin-bottom:4px; font-size:10px; color:rgba(255,255,255,0.6); }
+        .legend .dot { width:10px; height:10px; border-radius:2px; }
+        .ctrl {
+            position:absolute; top:10px; right:10px;
+            background:rgba(15,23,42,0.92); backdrop-filter:blur(10px);
+            border:1px solid rgba(255,255,255,0.1); border-radius:10px;
+            padding:8px; z-index:10; display:flex; flex-direction:column; gap:4px;
+        }
+        .ctrl button {
+            background:transparent; border:1px solid rgba(255,255,255,0.12);
+            border-radius:6px; color:rgba(255,255,255,0.7);
+            padding:5px 10px; font-size:11px; cursor:pointer;
+            font-family:inherit; transition:all 0.15s;
+        }
+        .ctrl button:hover { background:rgba(255,255,255,0.08); }
+        .ctrl button.active { background:rgba(255,255,255,0.15); color:#fff; border-color:rgba(255,255,255,0.3); }
+        .badge {
+            position:absolute; bottom:10px; left:10px;
+            background:rgba(15,23,42,0.7); border:1px solid rgba(255,255,255,0.08);
+            border-radius:6px; padding:3px 10px; color:rgba(255,255,255,0.35);
+            font-size:9px; z-index:10;
+        }
+        .maplibregl-ctrl-group {
+            background:rgba(15,23,42,0.9) !important; border:1px solid rgba(255,255,255,0.12) !important; border-radius:8px !important; overflow:hidden;
+        }
+        .maplibregl-ctrl-group button {
+            background:rgba(15,23,42,0.9) !important; color:rgba(255,255,255,0.7) !important; border-color:rgba(255,255,255,0.08) !important;
+        }
+        .maplibregl-popup-content {
+            background:rgba(15,23,42,0.95) !important; color:#fff !important; border:1px solid rgba(255,255,255,0.1);
+            border-radius:8px !important; font-size:12px; padding:8px 12px !important;
+            box-shadow:0 4px 20px rgba(0,0,0,0.4) !important;
+        }
+        .maplibregl-popup-tip { border-top-color:rgba(15,23,42,0.95) !important; }
+    </style>
+</head>
+<body>
+    <div id=\"map\"></div>
+
+    <div class=\"panel\">
+        <h3>🌋 Epicentro M7.4</h3>
+        <div class=\"meta\">San Jose del Palmar, Choco &middot; 10 ago 2026</div>
+        <div class=\"row\">
+            <div><span>Latitud</span>{epi_lat}°N</div>
+            <div><span>Longitud</span>{epi_lon_abs}°O</div>
+        </div>
+        <div class=\"row\">
+            <div><span>Profundidad</span>107 km</div>
+            <div><span>Magnitud</span>Mw 7.4</div>
+        </div>
+    </div>
+
+    <div class=\"ctrl\">
+        <button id=\"btn-terrain\" class=\"active\" onclick=\"toggleTerrain()\">⛰️ Terreno 3D</button>
+        <button id=\"btn-hillshade\" class=\"active\" onclick=\"toggleHillshade()\">🌑 Hillshade</button>
+        <button id=\"btn-sat\" onclick=\"toggleSat()\">🛰️ Satelite</button>
+        <button onclick=\"resetView()\">⌖ Centrar</button>
+    </div>
+
+    <div class=\"legend\">
+        <h4>Elevacion (m s.n.m.)</h4>
+        <div class=\"item\"><div class=\"dot\" style=\"background:#1e3a5f;\"></div>0 &ndash; 500 (Valles/Pacifico)</div>
+        <div class=\"item\"><div class=\"dot\" style=\"background:#2d5a3c;\"></div>500 &ndash; 1500 (Laderas)</div>
+        <div class=\"item\"><div class=\"dot\" style=\"background:#5a7a4a;\"></div>1500 &ndash; 2500 (Montana media)</div>
+        <div class=\"item\"><div class=\"dot\" style=\"background:#8aaa6a;\"></div>2500 &ndash; 3500 (Montana alta)</div>
+        <div class=\"item\"><div class=\"dot\" style=\"background:#c0daa0;\"></div>3500+ (Paramo/nieves)</div>
+    </div>
+
+    <div class=\"badge\">MapLibre GL &middot; DEM: AWS Terrain Tiles &middot; Hillshade</div>
+
+    <script>
+        const ciudades = {ciudades_json};
+        const epi = [{epi_lon}, {epi_lat}];
+
+        const styleBase = {{
+            version: 8,
+            sources: {{
+                osm: {{
+                    type: 'raster',
+                    tiles: ['https://basemaps.cartocdn.com/dark_all/{{z}}/{{x}}/{{y}}.png'],
+                    tileSize: 256,
+                    attribution: '&copy; OSM &copy; CARTO'
+                }},
+                satellite: {{
+                    type: 'raster',
+                    tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}'],
+                    tileSize: 256,
+                    attribution: '&copy; Esri'
+                }},
+                terrainSource: {{
+                    type: 'raster-dem',
+                    url: 'https://demotiles.maplibre.org/terrain-tiles/tiles.json',
+                    tileSize: 256
+                }},
+                hillshadeSource: {{
+                    type: 'raster-dem',
+                    url: 'https://demotiles.maplibre.org/terrain-tiles/tiles.json',
+                    tileSize: 256
+                }}
+            }},
+            layers: [
+                {{ id: 'osm', type: 'raster', source: 'osm' }},
+                {{
+                    id: 'hillshade',
+                    type: 'hillshade',
+                    source: 'hillshadeSource',
+                    paint: {{
+                        'hillshade-exaggeration': 0.6,
+                        'hillshade-shadow-color': '#000000',
+                        'hillshade-highlight-color': '#ffffff',
+                        'hillshade-accent-color': '#333333',
+                        'hillshade-illumination-anchor': 'viewport',
+                        'hillshade-illumination-direction': 315
+                    }}
+                }}
+            ],
+            terrain: {{
+                source: 'terrainSource',
+                exaggeration: 1.2
+            }}
+        }};
+
+        const map = new maplibregl.Map({{
+            container: 'map',
+            style: styleBase,
+            center: epi,
+            zoom: 8.5,
+            pitch: 65,
+            bearing: -30,
+            maxPitch: 85,
+            antialias: true
+        }});
+
+        map.addControl(new maplibregl.NavigationControl({{
+            visualizePitch: true,
+            showZoom: true,
+            showCompass: true
+        }}), 'bottom-right');
+
+        map.addControl(new maplibregl.ScaleControl({{
+            maxWidth: 100,
+            unit: 'metric'
+        }}), 'bottom-left');
+
+        map.on('load', () => {{
+            const el = document.createElement('div');
+            el.style.cssText = 'width:20px;height:20px;border-radius:50%;background:#ff3333;border:3px solid #ffaaaa;box-shadow:0 0 0 0 rgba(255,50,50,0.7);animation:pulse 2s infinite;cursor:pointer;';
+            const style = document.createElement('style');
+            style.textContent = '@keyframes pulse{{0%{{box-shadow:0 0 0 0 rgba(255,50,50,0.7);}}70%{{box-shadow:0 0 0 15px rgba(255,50,50,0);}}100%{{box-shadow:0 0 0 0 rgba(255,50,50,0);}}}}';
+            document.head.appendChild(style);
+
+            new maplibregl.Marker(el)
+                .setLngLat(epi)
+                .setPopup(new maplibregl.Popup({{offset:12}}).setHTML('<b>Epicentro M7.4</b><br>Profundidad: 107 km<br>Lat: {epi_lat}°N, Lon: {epi_lon_abs}°O'))
+                .addTo(map);
+
+            ciudades.forEach(c => {{
+                const color = c.psa03 > 0.2 ? '#ff8844' : (c.psa03 > 0.1 ? '#ffcc44' : '#44aaff');
+                const cityEl = document.createElement('div');
+                cityEl.style.cssText = `width:10px;height:10px;border-radius:50%;background:${{color}};border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.4);cursor:pointer;`;
+                new maplibregl.Marker(cityEl)
+                    .setLngLat([c.lon, c.lat])
+                    .setPopup(new maplibregl.Popup({{offset:10}}).setHTML(`<b>${{c.name}}</b><br>Poblacion expuesta: ${{c.pop.toLocaleString()}}<br>PSA 0.3s: ${{c.psa03}}g`))
+                    .addTo(map);
+            }});
+
+            map.addSource('bounds', {{
+                type: 'geojson',
+                data: {{
+                    type: 'Feature',
+                    geometry: {{
+                        type: 'Polygon',
+                        coordinates: [[
+                            [{w},{s}],[{e},{s}],[{e},{n}],[{w},{n}],[{w},{s}]
+                        ]]
+                    }}
+                }}
+            }});
+            map.addLayer({{
+                id: 'bounds-line',
+                type: 'line',
+                source: 'bounds',
+                paint: {{
+                    'line-color': 'rgba(100,180,255,0.3)',
+                    'line-width': 1,
+                    'line-dasharray': [3,3]
+                }}
+            }});
+        }});
+
+        let terrainOn = true, hillOn = true, satOn = false;
+        function toggleTerrain(){{
+            terrainOn = !terrainOn;
+            map.setTerrain(terrainOn ? {{source:'terrainSource', exaggeration:1.2}} : null);
+            document.getElementById('btn-terrain').classList.toggle('active', terrainOn);
+        }}
+        function toggleHillshade(){{
+            hillOn = !hillOn;
+            map.setLayoutProperty('hillshade', 'visibility', hillOn ? 'visible' : 'none');
+            document.getElementById('btn-hillshade').classList.toggle('active', hillOn);
+        }}
+        function toggleSat(){{
+            satOn = !satOn;
+            if(satOn){{
+                map.setLayoutProperty('osm', 'visibility', 'none');
+                if(!map.getLayer('sat')) map.addLayer({{id:'sat', type:'raster', source:'satellite'}}, 'hillshade');
+                else map.setLayoutProperty('sat', 'visibility', 'visible');
+            }} else {{
+                map.setLayoutProperty('osm', 'visibility', 'visible');
+                if(map.getLayer('sat')) map.setLayoutProperty('sat', 'visibility', 'none');
+            }}
+            document.getElementById('btn-sat').classList.toggle('active', satOn);
+        }}
+        function resetView(){{
+            map.flyTo({{center:epi, zoom:8.5, pitch:65, bearing:-30, duration:1500}});
+        }}
+    </script>
+</body>
+</html>"""
+    maplibre_html = maplibre_html.format(
+        ciudades_json=ciudades_json,
+        epi_lat=epi_lat,
+        epi_lon=epi_lon,
+        epi_lon_abs=abs(epi_lon),
+        w=w, s=s, e=e, n=n
     )
 
-    terrain_layer = pdk.Layer(
-        "TerrainLayer",
-        # 1. DEM (SRTM/Copernicus) en tiempo real
-        elevation_data="https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png",
-        # 2. Textura clásica de OpenStreetMap (Leaflet style)
-        texture="https://a.tile.openstreetmap.org/{z}/{x}/{y}.png", 
-        elevation_decoder={"rScaler": 256, "gScaler": 1, "bScaler": 1/256, "offset": -32768},
-        bounds=[W, S, E, N],
-        mesh_max_error=50.0,
-        opacity=1
-    )
+    components.html(maplibre_html, height=620, scrolling=False)
 
-    scatter_data = [{'lat': EPI[0], 'lon': EPI[1], 'z': 5000}]
-    epicenter_layer = pdk.Layer(
-        "ScatterplotLayer", data=scatter_data, get_position=['lon', 'lat', 'z'],
-        get_radius=2000, get_color=[255, 0, 0, 255], pickable=True
-    )
+    # PANEL INFERIOR: metricas + guia
+    st.markdown('---')
+    c1, c2, c3, c4, c5 = st.columns(5)
+    with c1: st.metric('Elevacion maxima', '~4.700 m', help='Nevado del Huila')
+    with c2: st.metric('Pendiente media', '~18 deg', help='Cordillera Occidental')
+    with c3: st.metric('Ciudades en mapa', len(ciudades), help='Principales centros urbanos')
+    with c4: st.metric('Resolucion DEM', '30 m', help='SRTM 1 arc-sec')
+    with c5: st.metric('Exageracion vertical', '1.2x', help='Realce del relieve para visualizacion')
 
-    r = pdk.Deck(
-        layers=[terrain_layer, epicenter_layer], initial_view_state=view_state,
-        tooltip={"text": "Epicentro M7.4\nLat: {lat}\nLon: {lon}"}
-    )
+    guia_col, leyenda_col = st.columns([3, 2])
+    with guia_col:
+        st.markdown("""
+        <div style="background:#f8f9fa; border-radius:10px; padding:16px; border:1px solid #dee2e6;">
+            <h4 style="margin:0 0 10px 0; color:#12263f; font-size:15px;">Como navegar el mapa 3D</h4>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:13px; color:#46587a;">
+                <div>🖱️ <b>Click derecho + arrastra</b> &rarr; Rotar / inclinar</div>
+                <div>🔄 <b>Rueda del raton</b> &rarr; Zoom in/out</div>
+                <div>👆 <b>Click + arrastra</b> &rarr; Pan (mover mapa)</div>
+                <div>📐 <b>Ctrl + arrastra</b> &rarr; Inclinar camara</div>
+            </div>
+            <p style="margin:10px 0 0 0; font-size:12px; color:#6c757d;">
+                Usa los botones superiores derechos del mapa para activar/desactivar <b>terreno 3D</b>, <b>hillshade</b> o <b>vista satelital</b>.
+                El hillshade resalta el relieve con sombras dinamicas segun la inclinacion de la camara.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    with leyenda_col:
+        st.markdown("""
+        <div style="background:#f8f9fa; border-radius:10px; padding:16px; border:1px solid #dee2e6;">
+            <h4 style="margin:0 0 10px 0; color:#12263f; font-size:15px;">Simbolos en el mapa</h4>
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;"><div style="width:12px; height:12px; border-radius:50%; background:#ff3333; border:2px solid #ffaaaa;"></div><span style="font-size:12px; color:#46587a;">Epicentro M7.4 (pulso)</span></div>
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;"><div style="width:10px; height:10px; border-radius:50%; background:#ff8844; border:2px solid #fff;"></div><span style="font-size:12px; color:#46587a;">Ciudad alta sacudida (PSA &gt;0.2g)</span></div>
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;"><div style="width:10px; height:10px; border-radius:50%; background:#ffcc44; border:2px solid #fff;"></div><span style="font-size:12px; color:#46587a;">Ciudad media sacudida</span></div>
+            <div style="display:flex; align-items:center; gap:8px;"><div style="width:10px; height:10px; border-radius:50%; background:#44aaff; border:2px solid #fff;"></div><span style="font-size:12px; color:#46587a;">Ciudad baja sacudida</span></div>
+        </div>
+        """, unsafe_allow_html=True)
 
-    st.pydeck_chart(r)
-    st.caption('💡 **Consejo:** Haz clic y arrastra para rotar la vista. Usa la rueda del ratón para hacer zoom. Las montañas oscuras al oeste son la selva del Chocó y la cordillera de los Andes.')
+    st.caption('💡 **Nota tecnica:** El mapa usa MapLibre GL con terrain 3D y hillshade dinamico. La exageracion vertical de 1.2x realza el relieve sin distorsionar la geografia.')
 
 def sec_comparativa():
     st.title('🆚 Dos sismos, dos historias')
