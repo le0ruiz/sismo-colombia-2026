@@ -322,8 +322,10 @@ def sec_3d():
 
     terrain_layer = pdk.Layer(
         "TerrainLayer",
+        # 1. DEM (SRTM/Copernicus) en tiempo real
         elevation_data="https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png",
-        texture="https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+        # 2. Textura clásica de OpenStreetMap (Leaflet style)
+        texture="https://a.tile.openstreetmap.org/{z}/{x}/{y}.png", 
         elevation_decoder={"rScaler": 256, "gScaler": 1, "bScaler": 1/256, "offset": -32768},
         bounds=[W, S, E, N],
         mesh_max_error=50.0,
