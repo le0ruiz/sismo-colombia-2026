@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # =====================================================================
 # Observatorio Sísmico Interactivo: Colombia 2026
 # Autor: Rafael Leonardo Ruiz Díaz
@@ -289,7 +290,7 @@ def sec_sismo():
         with c2:
             fig = px.histogram(x=mags, nbins=20, labels={'x': 'Magnitud'}, title='Frecuencia–magnitud')
             chart_cfg(fig); st.plotly_chart(fig, width='stretch')
-          
+
 def sec_3d():
     st.title('🌐 Terreno 3D · Vista Google Earth')
     lectura('<b>Relieve real con hillshade:</b> navega libremente por la Cordillera Occidental. Activa o desactiva capas, inclina la camara y explora como lo harias en Google Earth. Los datos de elevacion provienen del SRTM.')
@@ -323,6 +324,7 @@ def sec_3d():
     epi_lat, epi_lon = EPI[0], EPI[1]
     w, s, e, n = W, S, E, N
 
+    # HTML MAPLIBRE CORREGIDO: Altura fija y carga de terreno en el evento 'load' para máxima compatibilidad
     maplibre_html = """<!DOCTYPE html>
 <html>
 <head>
@@ -332,7 +334,7 @@ def sec_3d():
     <link href="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.css" rel="stylesheet"/>
     <style>
         body { margin:0; padding:0; overflow:hidden; font-family: 'Segoe UI', sans-serif; background:#0f172a; }
-        #map { width:100%; height:85vh; }
+        #map { position:absolute; top:0; bottom:0; width:100%; height:600px; }
         .panel { position:absolute; top:10px; left:10px; background:rgba(15,23,42,0.92); backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,0.1); border-radius:10px; padding:12px 14px; color:#fff; max-width:230px; z-index:10; box-shadow:0 4px 20px rgba(0,0,0,0.4); }
         .panel h3 { margin:0 0 6px 0; font-size:14px; font-weight:500; }
         .panel .meta { font-size:11px; color:rgba(255,255,255,0.5); margin-bottom:8px; }
@@ -386,68 +388,91 @@ def sec_3d():
     <script>
         const ciudades = __CIUDADES_JSON__;
         const epi = [__EPI_LON__, __EPI_LAT__];
+        
         const styleBase = {
             version: 8,
             sources: {
                 osm: { type: 'raster', tiles: ['https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'], tileSize: 256, attribution: '&copy; OSM &copy; CARTO' },
                 satellite: { type: 'raster', tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'], tileSize: 256, attribution: '&copy; Esri' },
-                // FUENTE DEM ROBUSTA: AWS Terrarium (SRTM global)
                 terrainSource: { 
                     type: 'raster-dem', 
                     tiles: ['https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png'], 
                     tileSize: 256, 
                     encoding: 'terrarium',
-                    maxzoom: 14
+                    maxzoom: 15
                 },
                 hillshadeSource: { 
                     type: 'raster-dem', 
                     tiles: ['https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png'], 
                     tileSize: 256, 
                     encoding: 'terrarium',
-                    maxzoom: 14
+                    maxzoom: 15
                 }
             },
             layers: [
                 { id: 'osm', type: 'raster', source: 'osm' },
                 { id: 'hillshade', type: 'hillshade', source: 'hillshadeSource', paint: { 'hillshade-exaggeration': 0.8, 'hillshade-shadow-color': '#000000', 'hillshade-highlight-color': '#ffffff', 'hillshade-accent-color': '#333333', 'hillshade-illumination-anchor': 'viewport', 'hillshade-illumination-direction': 315 } }
-            ],
-            // Terreno configurado en el estilo base
-            terrain: { source: 'terrainSource', exaggeration: 2.5 }
+            ]
         };
-        const map = new maplibregl.Map({ container: 'map', style: styleBase, center: epi, zoom: 8.5, pitch: 65, bearing: -30, maxPitch: 85, antialias: true });
+        
+        const map = new maplibregl.Map({ container: 'map', style: styleBase, center: epi, zoom: 8.5, pitch: 60, bearing: -30, maxPitch: 85, antialias: true });
+        
         map.addControl(new maplibregl.NavigationControl({ visualizePitch: true, showZoom: true, showCompass: true }), 'bottom-right');
         map.addControl(new maplibregl.ScaleControl({ maxWidth: 100, unit: 'metric' }), 'bottom-left');
         
         map.on('load', () => {
-            // Forzar la carga del terreno al cargar el mapa
-            map.setTerrain({ source: 'terrainSource', exaggeration: 2.5 });
+            // INICIALIZAR TERRENO AQUÍ
+            map.setTerrain({ source: 'terrainSource', exaggeration: 1.5 });
             
             const el = document.createElement('div');
             el.style.cssText = 'width:20px;height:20px;border-radius:50%;background:#ff3333;border:3px solid #ffaaaa;box-shadow:0 0 0 0 rgba(255,50,50,0.7);animation:pulse 2s infinite;cursor:pointer;';
             const style = document.createElement('style');
             style.textContent = '@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,50,50,0.7);}70%{box-shadow:0 0 0 15px rgba(255,50,50,0);}100%{box-shadow:0 0 0 0 rgba(255,50,50,0);}}';
             document.head.appendChild(style);
+            
             new maplibregl.Marker(el).setLngLat(epi).setPopup(new maplibregl.Popup({offset:12}).setHTML('<b>Epicentro M7.4</b><br>Profundidad: 107 km<br>Lat: __EPI_LAT__°N, Lon: __EPI_LON_ABS__°O')).addTo(map);
+            
             ciudades.forEach(c => {
                 const color = c.psa03 > 0.2 ? '#ff8844' : (c.psa03 > 0.1 ? '#ffcc44' : '#44aaff');
                 const cityEl = document.createElement('div');
                 cityEl.style.cssText = `width:10px;height:10px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.4);cursor:pointer;`;
                 new maplibregl.Marker(cityEl).setLngLat([c.lon, c.lat]).setPopup(new maplibregl.Popup({offset:10}).setHTML(`<b>${c.name}</b><br>Poblacion expuesta: ${c.pop.toLocaleString()}<br>PSA 0.3s: ${c.psa03}g`)).addTo(map);
             });
+            
             map.addSource('bounds', { type: 'geojson', data: { type: 'Feature', geometry: { type: 'Polygon', coordinates: [[[__W__,__S__],[__E__,__S__],[__E__,__N__],[__W__,__N__],[__W__,__S__]]] } } });
             map.addLayer({ id: 'bounds-line', type: 'line', source: 'bounds', paint: { 'line-color': 'rgba(100,180,255,0.3)', 'line-width': 1, 'line-dasharray': [3,3] } });
         });
         
         let terrainOn = true, hillOn = true, satOn = false;
+        
         function toggleTerrain(){ 
             terrainOn = !terrainOn; 
-            // Forzar setTerrain dinámicamente
-            map.setTerrain(terrainOn ? {source:'terrainSource', exaggeration:2.5} : null); 
+            map.setTerrain(terrainOn ? {source:'terrainSource', exaggeration:1.5} : null); 
             document.getElementById('btn-terrain').classList.toggle('active', terrainOn); 
         }
-        function toggleHillshade(){ hillOn = !hillOn; map.setLayoutProperty('hillshade', 'visibility', hillOn ? 'visible' : 'none'); document.getElementById('btn-hillshade').classList.toggle('active', hillOn); }
-        function toggleSat(){ satOn = !satOn; if(satOn){ map.setLayoutProperty('osm', 'visibility', 'none'); if(!map.getLayer('sat')) map.addLayer({id:'sat', type:'raster', source:'satellite'}, 'hillshade'); else map.setLayoutProperty('sat', 'visibility', 'visible'); } else { map.setLayoutProperty('osm', 'visibility', 'visible'); if(map.getLayer('sat')) map.setLayoutProperty('sat', 'visibility', 'none'); } document.getElementById('btn-sat').classList.toggle('active', satOn); }
-        function resetView(){ map.flyTo({center:epi, zoom:8.5, pitch:65, bearing:-30, duration:1500}); }
+        
+        function toggleHillshade(){ 
+            hillOn = !hillOn; 
+            map.setLayoutProperty('hillshade', 'visibility', hillOn ? 'visible' : 'none'); 
+            document.getElementById('btn-hillshade').classList.toggle('active', hillOn); 
+        }
+        
+        function toggleSat(){ 
+            satOn = !satOn; 
+            if(satOn){ 
+                map.setLayoutProperty('osm', 'visibility', 'none'); 
+                if(!map.getLayer('sat')) map.addLayer({id:'sat', type:'raster', source:'satellite'}, 'hillshade'); 
+                else map.setLayoutProperty('sat', 'visibility', 'visible'); 
+            } else { 
+                map.setLayoutProperty('osm', 'visibility', 'visible'); 
+                if(map.getLayer('sat')) map.setLayoutProperty('sat', 'visibility', 'none'); 
+            } 
+            document.getElementById('btn-sat').classList.toggle('active', satOn); 
+        }
+        
+        function resetView(){ 
+            map.flyTo({center:epi, zoom:8.5, pitch:60, bearing:-30, duration:1500}); 
+        }
     </script>
 </body>
 </html>"""
@@ -469,7 +494,7 @@ def sec_3d():
     with c2: st.metric('Pendiente media', '~18 deg', help='Cordillera Occidental')
     with c3: st.metric('Ciudades en mapa', len(ciudades), help='Principales centros urbanos')
     with c4: st.metric('Resolucion DEM', '30 m', help='SRTM 1 arc-sec')
-    with c5: st.metric('Exageracion vertical', '2.5x', help='Realce del relieve para visualizacion')
+    with c5: st.metric('Exageracion vertical', '1.5x', help='Realce del relieve para visualizacion')
 
     guia_col, leyenda_col = st.columns([3, 2])
     with guia_col:
@@ -499,7 +524,6 @@ def sec_3d():
         </div>
         """, unsafe_allow_html=True)
     st.caption('💡 **Nota tecnica:** El mapa usa MapLibre GL con terrain 3D y hillshade dinamico. La exageracion vertical de 1.5x realza el relieve sin distorsionar la geografia.')
-
 
 def sec_comparativa():
     st.title('🆚 Dos sismos, dos historias')
