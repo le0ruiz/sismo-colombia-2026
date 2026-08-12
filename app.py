@@ -335,6 +335,7 @@ def sec_3d():
     epi_lat, epi_lon = EPI[0], EPI[1]
     w, s, e, n = W, S, E, N
 
+    # MAPA MAPLIBRE GL 3D - CORREGIDO
     maplibre_html = """<!DOCTYPE html>
 <html>
 <head>
@@ -423,45 +424,62 @@ def sec_3d():
                 { id: 'osm', type: 'raster', source: 'osm' },
                 { id: 'hillshade', type: 'hillshade', source: 'hillshadeSource', paint: { 'hillshade-exaggeration': 0.8, 'hillshade-shadow-color': '#000000', 'hillshade-highlight-color': '#ffffff', 'hillshade-accent-color': '#333333', 'hillshade-illumination-anchor': 'viewport', 'hillshade-illumination-direction': 315 } }
             ],
-            // Definir el terreno en el estilo base para que cargue automáticamente
-            terrain: { source: 'terrainSource', exaggeration: 1.5 }
+            terrain: { source: 'terrainSource', exaggeration: 2.0 }
         };
         
-        const map = new maplibregl.Map({ container: 'map', style: styleBase, center: epi, zoom: 8.5, pitch: 60, bearing: -30, maxPitch: 85, antialias: true });
+        const map = new maplibregl.Map({ container: 'map', style: styleBase, center: epi, zoom: 8.5, pitch: 70, bearing: -30, maxPitch: 85, antialias: true });
         
         map.addControl(new maplibregl.NavigationControl({ visualizePitch: true, showZoom: true, showCompass: true }), 'bottom-right');
         map.addControl(new maplibregl.ScaleControl({ maxWidth: 100, unit: 'metric' }), 'bottom-left');
         
         map.on('load', () => {
-            // Capa del epicentro (Círculo nativo de MapLibre)
+            // Capa del epicentro
             map.addSource('epi', { type: 'geojson', data: { type: 'Point', coordinates: epi } });
             map.addLayer({
                 id: 'epi-circle',
                 type: 'circle',
                 source: 'epi',
                 paint: {
-                    'circle-radius': 8,
+                    'circle-radius': 10,
                     'circle-color': '#ff3333',
-                    'circle-stroke-width': 2,
-                    'circle-stroke-color': '#ffffff'
+                    'circle-stroke-width': 3,
+                    'circle-stroke-color': '#ffffff',
+                    'circle-pitch-alignment': 'viewport' // Hace que mire a la cámara
+                }
+            });
+            map.addLayer({
+                id: 'epi-label',
+                type: 'symbol',
+                source: 'epi',
+                layout: {
+                    'text-field': 'Epicentro M7.4',
+                    'text-offset': [0, 1.5],
+                    'text-anchor': 'top',
+                    'text-size': 12
+                },
+                paint: {
+                    'text-color': '#ffffff',
+                    'text-halo-color': '#ff3333',
+                    'text-halo-width': 1
                 }
             });
 
-            // Capa de ciudades (Círculos nativos de MapLibre)
+            // Capa de ciudades
             map.addSource('ciudades', { type: 'geojson', data: ciudades });
             map.addLayer({
                 id: 'ciudades-circle',
                 type: 'circle',
                 source: 'ciudades',
                 paint: {
-                    'circle-radius': 6,
+                    'circle-radius': 7,
                     'circle-color': ['case', ['>', ['get', 'psa03'], 0.2], '#ff8844', ['>', ['get', 'psa03'], 0.1], '#ffcc44', '#44aaff'],
-                    'circle-stroke-width': 1.5,
-                    'circle-stroke-color': '#ffffff'
+                    'circle-stroke-width': 2,
+                    'circle-stroke-color': '#ffffff',
+                    'circle-pitch-alignment': 'viewport' // Hace que mire a la cámara
                 }
             });
 
-            // Popups interactivos corregidos
+            // Popups interactivos
             const popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false });
             
             map.on('mouseenter', 'epi-circle', () => { map.getCanvas().style.cursor = 'pointer'; });
@@ -486,7 +504,7 @@ def sec_3d():
         
         function toggleTerrain(){ 
             terrainOn = !terrainOn; 
-            map.setTerrain(terrainOn ? {source:'terrainSource', exaggeration:1.5} : null); 
+            map.setTerrain(terrainOn ? {source:'terrainSource', exaggeration:2.0} : null); 
             document.getElementById('btn-terrain').classList.toggle('active', terrainOn); 
         }
         
@@ -510,7 +528,7 @@ def sec_3d():
         }
         
         function resetView(){ 
-            map.flyTo({center:epi, zoom:8.5, pitch:60, bearing:-30, duration:1500}); 
+            map.flyTo({center:epi, zoom:8.5, pitch:70, bearing:-30, duration:1500}); 
         }
     </script>
 </body>
@@ -533,7 +551,7 @@ def sec_3d():
     with c2: st.metric('Pendiente media', '~18 deg', help='Cordillera Occidental')
     with c3: st.metric('Ciudades en mapa', len(ciudades), help='Principales centros urbanos')
     with c4: st.metric('Resolucion DEM', '30 m', help='SRTM 1 arc-sec')
-    with c5: st.metric('Exageracion vertical', '1.5x', help='Realce del relieve para visualizacion')
+    with c5: st.metric('Exageracion vertical', '2.0x', help='Realce del relieve para visualizacion')
 
     guia_col, leyenda_col = st.columns([3, 2])
     with guia_col:
@@ -562,7 +580,7 @@ def sec_3d():
             <div style="display:flex; align-items:center; gap:8px;"><div style="width:10px; height:10px; border-radius:50%; background:#44aaff; border:2px solid #fff;"></div><span style="font-size:12px; color:#46587a;">Ciudad baja sacudida</span></div>
         </div>
         """, unsafe_allow_html=True)
-    st.caption('💡 **Nota tecnica:** El mapa usa MapLibre GL con terrain 3D y hillshade dinamico. La exageracion vertical de 1.5x realza el relieve sin distorsionar la geografia.')
+    st.caption('💡 **Nota tecnica:** El mapa usa MapLibre GL con terrain 3D y hillshade dinamico. La exageracion vertical de 2.0x realza el relieve sin distorsionar la geografia.')
 
 def sec_comparativa():
     st.title('🆚 Dos sismos, dos historias')
