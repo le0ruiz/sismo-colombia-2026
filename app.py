@@ -430,10 +430,8 @@ def sec_3d():
         map.addControl(new maplibregl.ScaleControl({ maxWidth: 100, unit: 'metric' }), 'bottom-left');
         
         map.on('load', () => {
-            // Forzar terreno
             map.setTerrain({ source: 'terrainSource', exaggeration: 2.0 });
             
-            // CORRECCIÓN: GeoJSON Feature estricto para el epicentro
             map.addSource('epi', { 
                 type: 'geojson', 
                 data: { 
@@ -455,7 +453,6 @@ def sec_3d():
                 }
             });
 
-            // Capa de ciudades
             map.addSource('ciudades', { type: 'geojson', data: ciudades });
             map.addLayer({
                 id: 'ciudades-circle',
@@ -470,7 +467,6 @@ def sec_3d():
                 }
             });
 
-            // Popups interactivos
             const popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false });
             
             map.on('mouseenter', 'epi-circle', () => { map.getCanvas().style.cursor = 'pointer'; });
