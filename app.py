@@ -289,7 +289,6 @@ def sec_sismo():
         with c2:
             fig = px.histogram(x=mags, nbins=20, labels={'x': 'Magnitud'}, title='Frecuencia–magnitud')
             chart_cfg(fig); st.plotly_chart(fig, width='stretch')
-
 def sec_3d():
     st.title('🌐 Terreno 3D · Vista Google Earth')
     lectura('<b>Relieve real con hillshade:</b> navega libremente por la Cordillera Occidental. Activa o desactiva capas, inclina la camara y explora como lo harias en Google Earth. Los datos de elevacion provienen del SRTM.')
@@ -391,19 +390,37 @@ def sec_3d():
             sources: {
                 osm: { type: 'raster', tiles: ['https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'], tileSize: 256, attribution: '&copy; OSM &copy; CARTO' },
                 satellite: { type: 'raster', tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'], tileSize: 256, attribution: '&copy; Esri' },
-                terrainSource: { type: 'raster-dem', url: 'https://demotiles.maplibre.org/terrain-tiles/tiles.json', tileSize: 256 },
-                hillshadeSource: { type: 'raster-dem', url: 'https://demotiles.maplibre.org/terrain-tiles/tiles.json', tileSize: 256 }
+                // FUENTE DEM ROBUSTA: AWS Terrarium (SRTM global)
+                terrainSource: { 
+                    type: 'raster-dem', 
+                    tiles: ['https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png'], 
+                    tileSize: 256, 
+                    encoding: 'terrarium',
+                    maxzoom: 14
+                },
+                hillshadeSource: { 
+                    type: 'raster-dem', 
+                    tiles: ['https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png'], 
+                    tileSize: 256, 
+                    encoding: 'terrarium',
+                    maxzoom: 14
+                }
             },
             layers: [
                 { id: 'osm', type: 'raster', source: 'osm' },
-                { id: 'hillshade', type: 'hillshade', source: 'hillshadeSource', paint: { 'hillshade-exaggeration': 0.6, 'hillshade-shadow-color': '#000000', 'hillshade-highlight-color': '#ffffff', 'hillshade-accent-color': '#333333', 'hillshade-illumination-anchor': 'viewport', 'hillshade-illumination-direction': 315 } }
+                { id: 'hillshade', type: 'hillshade', source: 'hillshadeSource', paint: { 'hillshade-exaggeration': 0.8, 'hillshade-shadow-color': '#000000', 'hillshade-highlight-color': '#ffffff', 'hillshade-accent-color': '#333333', 'hillshade-illumination-anchor': 'viewport', 'hillshade-illumination-direction': 315 } }
             ],
-            terrain: { source: 'terrainSource', exaggeration: 1.2 }
+            // Terreno configurado en el estilo base
+            terrain: { source: 'terrainSource', exaggeration: 1.5 }
         };
         const map = new maplibregl.Map({ container: 'map', style: styleBase, center: epi, zoom: 8.5, pitch: 65, bearing: -30, maxPitch: 85, antialias: true });
         map.addControl(new maplibregl.NavigationControl({ visualizePitch: true, showZoom: true, showCompass: true }), 'bottom-right');
         map.addControl(new maplibregl.ScaleControl({ maxWidth: 100, unit: 'metric' }), 'bottom-left');
+        
         map.on('load', () => {
+            // Forzar la carga del terreno al cargar el mapa
+            map.setTerrain({ source: 'terrainSource', exaggeration: 1.5 });
+            
             const el = document.createElement('div');
             el.style.cssText = 'width:20px;height:20px;border-radius:50%;background:#ff3333;border:3px solid #ffaaaa;box-shadow:0 0 0 0 rgba(255,50,50,0.7);animation:pulse 2s infinite;cursor:pointer;';
             const style = document.createElement('style');
@@ -419,8 +436,14 @@ def sec_3d():
             map.addSource('bounds', { type: 'geojson', data: { type: 'Feature', geometry: { type: 'Polygon', coordinates: [[[__W__,__S__],[__E__,__S__],[__E__,__N__],[__W__,__N__],[__W__,__S__]]] } } });
             map.addLayer({ id: 'bounds-line', type: 'line', source: 'bounds', paint: { 'line-color': 'rgba(100,180,255,0.3)', 'line-width': 1, 'line-dasharray': [3,3] } });
         });
+        
         let terrainOn = true, hillOn = true, satOn = false;
-        function toggleTerrain(){ terrainOn = !terrainOn; map.setTerrain(terrainOn ? {source:'terrainSource', exaggeration:1.2} : null); document.getElementById('btn-terrain').classList.toggle('active', terrainOn); }
+        function toggleTerrain(){ 
+            terrainOn = !terrainOn; 
+            // Forzar setTerrain dinámicamente
+            map.setTerrain(terrainOn ? {source:'terrainSource', exaggeration:1.5} : null); 
+            document.getElementById('btn-terrain').classList.toggle('active', terrainOn); 
+        }
         function toggleHillshade(){ hillOn = !hillOn; map.setLayoutProperty('hillshade', 'visibility', hillOn ? 'visible' : 'none'); document.getElementById('btn-hillshade').classList.toggle('active', hillOn); }
         function toggleSat(){ satOn = !satOn; if(satOn){ map.setLayoutProperty('osm', 'visibility', 'none'); if(!map.getLayer('sat')) map.addLayer({id:'sat', type:'raster', source:'satellite'}, 'hillshade'); else map.setLayoutProperty('sat', 'visibility', 'visible'); } else { map.setLayoutProperty('osm', 'visibility', 'visible'); if(map.getLayer('sat')) map.setLayoutProperty('sat', 'visibility', 'none'); } document.getElementById('btn-sat').classList.toggle('active', satOn); }
         function resetView(){ map.flyTo({center:epi, zoom:8.5, pitch:65, bearing:-30, duration:1500}); }
@@ -445,7 +468,7 @@ def sec_3d():
     with c2: st.metric('Pendiente media', '~18 deg', help='Cordillera Occidental')
     with c3: st.metric('Ciudades en mapa', len(ciudades), help='Principales centros urbanos')
     with c4: st.metric('Resolucion DEM', '30 m', help='SRTM 1 arc-sec')
-    with c5: st.metric('Exageracion vertical', '1.2x', help='Realce del relieve para visualizacion')
+    with c5: st.metric('Exageracion vertical', '1.5x', help='Realce del relieve para visualizacion')
 
     guia_col, leyenda_col = st.columns([3, 2])
     with guia_col:
@@ -474,7 +497,8 @@ def sec_3d():
             <div style="display:flex; align-items:center; gap:8px;"><div style="width:10px; height:10px; border-radius:50%; background:#44aaff; border:2px solid #fff;"></div><span style="font-size:12px; color:#46587a;">Ciudad baja sacudida</span></div>
         </div>
         """, unsafe_allow_html=True)
-    st.caption('💡 **Nota tecnica:** El mapa usa MapLibre GL con terrain 3D y hillshade dinamico. La exageracion vertical de 1.2x realza el relieve sin distorsionar la geografia.')
+    st.caption('💡 **Nota tecnica:** El mapa usa MapLibre GL con terrain 3D y hillshade dinamico. La exageracion vertical de 1.5x realza el relieve sin distorsionar la geografia.')
+
 
 def sec_comparativa():
     st.title('🆚 Dos sismos, dos historias')
